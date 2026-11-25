@@ -155,17 +155,17 @@ struct ToolbarActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(color)
                 Text(label)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.secondary)
             }
+            .frame(width: 48, height: 38)
         }
-        .buttonStyle(.plain)
-        .frame(width: 44)
+        .buttonStyle(ToolbarTileButtonStyle())
         .help(label)
         .accessibilityLabel(label)
         .accessibilityIdentifier("toolbar.\(label.lowercased())")
@@ -181,14 +181,42 @@ struct ToolbarIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(color)
+                .frame(width: 30, height: 28)
         }
-        .buttonStyle(.plain)
-        .frame(width: 28)
+        .buttonStyle(ToolbarTileButtonStyle())
         .help(help)
         .accessibilityLabel(help)
         .accessibilityIdentifier("toolbar.\(help.lowercased())")
+    }
+}
+
+private struct ToolbarTileButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                backgroundColor(isPressed: configuration.isPressed),
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+            .scaleEffect(configuration.isPressed && isEnabled ? 0.95 : 1.0)
+            .opacity(isEnabled ? 1.0 : 0.45)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        guard isEnabled else { return .clear }
+        if isPressed { return Color.primary.opacity(0.15) }
+        if isHovering { return Color.primary.opacity(0.08) }
+        return .clear
     }
 }
 
