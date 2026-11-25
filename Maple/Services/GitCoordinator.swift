@@ -107,33 +107,57 @@ final class GitCoordinator {
     // MARK: - Open repository
 
     func openRepository(at path: String) async {
-        let validationError = await git.validateRepository(at: path)
-        if let validationError {
-            state.errorMessage = validationError
-            return
-        }
+        await openRepositories(at: [path])
+    }
 
-        let name = await git.repositoryName(at: path)
-        let branch: String
-        do {
-            branch = try await git.currentBranch(in: path)
-        } catch {
-            branch = "unknown"
-        }
+    func openRepositories(at paths: [String]) async {
+        guard !paths.isEmpty else { return }
 
-        let repo = GitRepository(name: name, path: path, currentBranch: branch)
+        var lastOpened: GitRepository?
+        var failures: [String] = []
 
-        if !state.repositories.contains(where: { $0.path == path }) {
+        for path in paths {
+            if let validationError = await git.validateRepository(at: path) {
+                let folderName = URL(fileURLWithPath: path).lastPathComponent
+                failures.append("\(folderName): \(validationError)")
+                continue
+            }
+
+            if let existing = state.repositories.first(where: { $0.path == path }) {
+                lastOpened = existing
+                continue
+            }
+
+            let name = await git.repositoryName(at: path)
+            let branch: String
+            do {
+                branch = try await git.currentBranch(in: path)
+            } catch {
+                branch = "unknown"
+            }
+
+            let repo = GitRepository(name: name, path: path, currentBranch: branch)
             state.repositories.append(repo)
+            lastOpened = repo
         }
-        recentRepos.save(paths: state.repositories.map(\.path))
-        // Setting the selection drives the watcher + data load through
-        // `selectRepository()` (see ContentView's onChange). Opening the folder
-        // that is already selected won't retrigger, so load explicitly too.
-        let wasAlreadySelected = state.selectedRepository?.path == path
-        state.selectedRepository = repo
-        if wasAlreadySelected {
-            await selectRepository()
+
+        if !state.repositories.isEmpty {
+            recentRepos.save(paths: state.repositories.map(\.path))
+        }
+
+        if let repo = lastOpened {
+            // Setting the selection drives the watcher + data load through
+            // `selectRepository()` (see ContentView's onChange). Opening the folder
+            // that is already selected won't retrigger, so load explicitly too.
+            let wasAlreadySelected = state.selectedRepository?.path == repo.path
+            state.selectedRepository = repo
+            if wasAlreadySelected {
+                await selectRepository()
+            }
+        }
+
+        if !failures.isEmpty {
+            state.errorMessage = failures.joined(separator: "\n")
         }
     }
 
@@ -216,7 +240,7 @@ final class GitCoordinator {
             state.currentDiffLines = []
             state.currentDiffFile = nil
             state.selectedLines = [:]
-            state.commitDiffLines = []
+            state.commitDiffFiles = []
         } catch {
             guard state.currentRepoPath == path else { return }
             state.errorMessage = error.localizedDescription
@@ -308,14 +332,14 @@ final class GitCoordinator {
 
     func loadCommitDiff() async {
         guard let path = state.currentRepoPath, let commit = state.selectedCommit else {
-            state.commitDiffLines = []
+            state.commitDiffFiles = []
             return
         }
 
         do {
-            state.commitDiffLines = try await git.diffForCommit(commit.id, in: path)
+            state.commitDiffFiles = try await git.diffFilesForCommit(commit.id, in: path)
         } catch {
-            state.commitDiffLines = []
+            state.commitDiffFiles = []
         }
     }
 
@@ -325,24 +349,28 @@ final class GitCoordinator {
         await runLightOperation { path in
             try await git.stage(file: file.path, in: path)
         }
+        await reconcileSelectedFileDiff()
     }
 
     func unstageFile(_ file: GitFileChange) async {
         await runLightOperation { path in
             try await git.unstage(file: file.path, in: path)
         }
+        await reconcileSelectedFileDiff()
     }
 
     func stageAllFiles() async {
         await runLightOperation { path in
             try await git.stageAll(in: path)
         }
+        await reconcileSelectedFileDiff()
     }
 
     func unstageAllFiles() async {
         await runLightOperation { path in
             try await git.unstageAll(in: path)
         }
+        await reconcileSelectedFileDiff()
     }
 
     // MARK: - Hunk / line staging
@@ -360,7 +388,7 @@ final class GitCoordinator {
         await runLightOperation { path in
             try await git.applyPatch(patch, cached: true, in: path)
         }
-        await loadFileDiff()
+        await reconcileSelectedFileDiff()
     }
 
     /// Unstages the selected `+` / `-` lines of the currently viewed (staged)
@@ -368,20 +396,51 @@ final class GitCoordinator {
     func unstageSelectedLines() async {
         guard let file = state.currentDiffFile,
               !state.selectedLines.isEmpty else { return }
-        let patch = file.patchText(forLines: state.selectedLines)
+        let patch = file.patchText(forLines: state.selectedLines, reverse: true)
         guard !patch.isEmpty else { return }
 
         await runLightOperation { path in
             try await git.applyPatch(patch, cached: true, reverse: true, in: path)
         }
-        await loadFileDiff()
+        await reconcileSelectedFileDiff()
+    }
+
+    private func reconcileSelectedFileDiff() async {
+        guard let selected = state.selectedFileChange else { return }
+        if state.fileChanges.contains(selected) {
+            await loadFileDiff()
+        } else {
+            state.selectedFileChange = nil
+            state.currentDiffFile = nil
+            state.currentDiffLines = []
+            state.selectedLines = [:]
+        }
     }
 
     // MARK: - Commit
 
-    func performCommit(message: String, amend: Bool = false) async {
+    @discardableResult
+    func performCommit(message: String, amend: Bool = false) async -> Bool {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        var succeeded = false
         await runOperation(refresh: .load, success: "Committed successfully") { path in
-            try await git.commit(message: message, amend: amend, in: path)
+            try await git.commit(message: trimmed, amend: amend, in: path)
+            succeeded = true
+        }
+        return succeeded
+    }
+
+    func generateCommitMessage() async -> String? {
+        guard let path = state.currentRepoPath else { return nil }
+        state.errorMessage = nil
+        do {
+            let summary = try await git.stagedDiffForCommitMessage(in: path)
+            return try await CommitMessageGenerator.generate(from: summary)
+        } catch {
+            state.errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -465,10 +524,16 @@ final class GitCoordinator {
         }
     }
 
-    func createNewBranch(name: String) async {
+    func createNewBranch(name: String, startPoint: String? = nil, checkout: Bool = true) async {
         guard !name.isEmpty else { return }
         await runOperation(refresh: .load, success: "Branch '\(name)' created") { path in
-            try await git.createBranch(name: name, in: path)
+            try await git.createBranch(name: name, startPoint: startPoint, checkout: checkout, in: path)
+        }
+    }
+
+    func resetCurrentBranch(to commit: GitCommit, mode: GitResetMode) async {
+        await runOperation(refresh: .load, success: "Reset to \(commit.shortID) (\(mode.title))") { path in
+            try await git.reset(to: commit.id, mode: mode, in: path)
         }
     }
 }

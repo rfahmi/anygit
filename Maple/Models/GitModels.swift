@@ -196,36 +196,67 @@ nonisolated struct DiffFile: Identifiable, Sendable {
     }
 
     /// Builds a patch that keeps only the `+` / `-` lines named by `selection`
-    /// within each hunk. Unselected additions are dropped entirely (they do not
-    /// exist in the "old" side of the file). Unselected deletions become
-    /// context lines (they still exist after the patch is applied). The hunk
-    /// header's `oldCount` / `newCount` are rewritten to match the rewritten
-    /// body; `oldStart` / `newStart` stay anchored to their original positions.
+    /// within each hunk.
+    /// - When `reverse` is `false` (staging): unselected additions are dropped
+    ///   and unselected deletions become context lines.
+    /// - When `reverse` is `true` (unstaging with `git apply --reverse`):
+    ///   unselected additions become context lines (they are present in the
+    ///   index) and unselected deletions are dropped (they are absent from the
+    ///   index).
     ///
-    /// - Parameter selection: map of hunk index → set of line indices within
-    ///   that hunk's `lines` array to keep as real `+` / `-` edits.
+    /// - Parameters:
+    ///   - selection: map of hunk index → set of line indices within
+    ///     that hunk's `lines` array to keep as real `+` / `-` edits.
+    ///   - reverse: set `true` when building a patch for `git apply --reverse`.
     /// - Returns: a git-apply-compatible patch, or an empty string if no hunk
     ///   contributes any selected change.
-    func patchText(forLines selection: [Int: Set<Int>]) -> String {
+    func patchText(forLines selection: [Int: Set<Int>], reverse: Bool = false) -> String {
         guard !preamble.isEmpty else { return "" }
 
-        var output: [String] = preamble
+        var hunkLines: [String] = []
         var anyEmitted = false
+        var totalOldCount = 0
+        var totalNewCount = 0
 
         for (hunkIndex, hunk) in hunks.enumerated() {
             guard let selectedIndices = selection[hunkIndex],
                   !selectedIndices.isEmpty else { continue }
 
-            let rewritten = Self.rewriteHunk(hunk, selectedLineIndices: selectedIndices)
+            let rewritten = Self.rewriteHunk(hunk, selectedLineIndices: selectedIndices, reverse: reverse)
             guard rewritten.hasRealEdit else { continue }
 
-            output.append("@@ -\(hunk.oldStart),\(rewritten.oldCount) +\(hunk.newStart),\(rewritten.newCount) @@")
-            output.append(contentsOf: rewritten.body)
+            let oldStart = rewritten.oldCount > 0 ? max(1, hunk.oldStart) : hunk.oldStart
+            let newStart = rewritten.newCount > 0 ? max(1, hunk.newStart) : hunk.newStart
+            hunkLines.append("@@ -\(oldStart),\(rewritten.oldCount) +\(newStart),\(rewritten.newCount) @@")
+            hunkLines.append(contentsOf: rewritten.body)
+            totalOldCount += rewritten.oldCount
+            totalNewCount += rewritten.newCount
             anyEmitted = true
         }
 
         guard anyEmitted else { return "" }
-        return output.joined(separator: "\n") + "\n"
+
+        // If a newly added file is only partially unstaged (oldCount > 0), the
+        // index still retains lines so git apply --reverse must see a normal
+        // file header rather than `new file mode` / `--- /dev/null`.
+        // Symmetrically, partially staging a deletion (newCount > 0) must not
+        // claim `+++ /dev/null`.
+        var adjustedPreamble = preamble
+        if reverse, totalOldCount > 0, let filePath = path {
+            adjustedPreamble = preamble.compactMap { line in
+                if line.hasPrefix("new file mode ") { return nil }
+                if line == "--- /dev/null" { return "--- a/\(filePath)" }
+                return line
+            }
+        } else if !reverse, totalNewCount > 0, let filePath = path {
+            adjustedPreamble = preamble.compactMap { line in
+                if line.hasPrefix("deleted file mode ") { return nil }
+                if line == "+++ /dev/null" { return "+++ b/\(filePath)" }
+                return line
+            }
+        }
+
+        return (adjustedPreamble + hunkLines).joined(separator: "\n") + "\n"
     }
 
     private struct RewrittenHunk {
@@ -235,36 +266,42 @@ nonisolated struct DiffFile: Identifiable, Sendable {
         var hasRealEdit: Bool
     }
 
-    private static func rewriteHunk(_ hunk: DiffHunk, selectedLineIndices: Set<Int>) -> RewrittenHunk {
+    private static func rewriteHunk(_ hunk: DiffHunk, selectedLineIndices: Set<Int>, reverse: Bool) -> RewrittenHunk {
         var result = RewrittenHunk(body: [], oldCount: 0, newCount: 0, hasRealEdit: false)
         for (lineIndex, line) in hunk.lines.enumerated() {
             let isSelected = selectedLineIndices.contains(lineIndex)
-            emit(line: line, isSelected: isSelected, into: &result)
+            emit(line: line, isSelected: isSelected, reverse: reverse, into: &result)
         }
         return result
     }
 
-    private static func emit(line: DiffLine, isSelected: Bool, into result: inout RewrittenHunk) {
+    private static func emit(line: DiffLine, isSelected: Bool, reverse: Bool, into result: inout RewrittenHunk) {
         switch line.type {
         case .context:
             result.body.append(" " + line.content)
             result.oldCount += 1
             result.newCount += 1
         case .addition:
-            // Unselected additions are dropped entirely - they don't exist in
-            // the old side and we don't want them in the new side either.
-            guard isSelected else { return }
-            result.body.append("+" + line.content)
-            result.newCount += 1
-            result.hasRealEdit = true
+            if isSelected {
+                result.body.append("+" + line.content)
+                result.newCount += 1
+                result.hasRealEdit = true
+            } else if reverse {
+                // In reverse mode, unselected additions already exist in the index
+                // and must remain as context lines so `git apply --reverse` matches.
+                result.body.append(" " + line.content)
+                result.oldCount += 1
+                result.newCount += 1
+            }
         case .deletion:
             if isSelected {
                 result.body.append("-" + line.content)
                 result.oldCount += 1
                 result.hasRealEdit = true
-            } else {
-                // Unselected deletion becomes context so the line survives the
-                // partial patch.
+            } else if !reverse {
+                // In forward mode, unselected deletions exist in the base and must
+                // remain as context lines. In reverse mode, they are absent from the
+                // index so they are dropped.
                 result.body.append(" " + line.content)
                 result.oldCount += 1
                 result.newCount += 1

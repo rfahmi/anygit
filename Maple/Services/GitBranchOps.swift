@@ -7,6 +7,33 @@
 
 import Foundation
 
+nonisolated enum GitResetMode: String, CaseIterable, Identifiable, Sendable {
+    case soft = "--soft"
+    case mixed = "--mixed"
+    case keep = "--keep"
+    case hard = "--hard"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .soft: return "Soft"
+        case .mixed: return "Mixed (Default)"
+        case .keep: return "Keep"
+        case .hard: return "Hard"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .soft: return "Keep index and working directory, differences will show as staged"
+        case .mixed: return "Keep working directory, differences will show as modifications"
+        case .keep: return "Reset index and working directory, but abort if any local changes would be discarded"
+        case .hard: return "Reset index and working directory, ALL local changes are discarded"
+        }
+    }
+}
+
 extension GitService {
 
     // MARK: - Checkout
@@ -69,5 +96,12 @@ extension GitService {
     /// Renames a local branch.
     func renameBranch(oldName: String, newName: String, in directory: String) async throws {
         _ = try await run(["branch", "-m", oldName, newName], in: directory)
+    }
+
+    // MARK: - Reset
+
+    /// Resets the current branch HEAD to `commitHash` using the specified mode.
+    func reset(to commitHash: String, mode: GitResetMode, in directory: String) async throws {
+        _ = try await run(["reset", mode.rawValue, commitHash], in: directory)
     }
 }

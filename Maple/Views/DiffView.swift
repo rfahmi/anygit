@@ -6,12 +6,15 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct DiffView: View {
     let fileName: String?
     let diffLines: [DiffLine]
     var diffFile: DiffFile?
     var selection: Binding<[Int: Set<Int>]>?
+
+    @State private var lastClickedLine: (hunkIndex: Int, lineIndex: Int)?
 
     init(
         fileName: String?,
@@ -80,6 +83,9 @@ struct DiffView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let file = diffFile, let selection {
                 structuredBody(file: file, selection: selection)
+                    .onChange(of: file.id) {
+                        lastClickedLine = nil
+                    }
             } else {
                 flatBody
             }
@@ -113,6 +119,7 @@ struct DiffView: View {
                             DiffLineView(
                                 line: line,
                                 isSelected: lineBinding(
+                                    file: file,
                                     hunkIndex: hunkIndex,
                                     lineIndex: lineIndex,
                                     selection: selection
@@ -150,6 +157,7 @@ struct DiffView: View {
     }
 
     private func lineBinding(
+        file: DiffFile,
         hunkIndex: Int,
         lineIndex: Int,
         selection: Binding<[Int: Set<Int>]>
@@ -157,19 +165,67 @@ struct DiffView: View {
         Binding(
             get: { selection.wrappedValue[hunkIndex]?.contains(lineIndex) ?? false },
             set: { newValue in
-                var current = selection.wrappedValue[hunkIndex] ?? []
-                if newValue {
-                    current.insert(lineIndex)
+                let isShiftPressed = NSEvent.modifierFlags.contains(.shift)
+                if isShiftPressed, let anchor = lastClickedLine {
+                    applyRangeSelection(
+                        file: file,
+                        from: anchor,
+                        to: (hunkIndex, lineIndex),
+                        selected: newValue,
+                        selection: selection
+                    )
                 } else {
-                    current.remove(lineIndex)
+                    var current = selection.wrappedValue[hunkIndex] ?? []
+                    if newValue {
+                        current.insert(lineIndex)
+                    } else {
+                        current.remove(lineIndex)
+                    }
+                    if current.isEmpty {
+                        selection.wrappedValue.removeValue(forKey: hunkIndex)
+                    } else {
+                        selection.wrappedValue[hunkIndex] = current
+                    }
                 }
-                if current.isEmpty {
-                    selection.wrappedValue.removeValue(forKey: hunkIndex)
-                } else {
-                    selection.wrappedValue[hunkIndex] = current
-                }
+                lastClickedLine = (hunkIndex, lineIndex)
             }
         )
+    }
+
+    private func applyRangeSelection(
+        file: DiffFile,
+        from start: (hunkIndex: Int, lineIndex: Int),
+        to end: (hunkIndex: Int, lineIndex: Int),
+        selected: Bool,
+        selection: Binding<[Int: Set<Int>]>
+    ) {
+        let lower = start <= end ? start : end
+        let upper = start <= end ? end : start
+
+        guard lower.hunkIndex >= 0, upper.hunkIndex < file.hunks.count else { return }
+
+        for hIdx in lower.hunkIndex...upper.hunkIndex {
+            let hunk = file.hunks[hIdx]
+            let minLine = max(0, hIdx == lower.hunkIndex ? lower.lineIndex : 0)
+            let maxLine = min(hunk.lines.count - 1, hIdx == upper.hunkIndex ? upper.lineIndex : hunk.lines.count - 1)
+            guard minLine <= maxLine else { continue }
+
+            var current = selection.wrappedValue[hIdx] ?? []
+            for lIdx in minLine...maxLine {
+                let lineType = hunk.lines[lIdx].type
+                guard lineType == .addition || lineType == .deletion else { continue }
+                if selected {
+                    current.insert(lIdx)
+                } else {
+                    current.remove(lIdx)
+                }
+            }
+            if current.isEmpty {
+                selection.wrappedValue.removeValue(forKey: hIdx)
+            } else {
+                selection.wrappedValue[hIdx] = current
+            }
+        }
     }
 
     static func modifiableIndices(in hunk: DiffHunk) -> Set<Int> {

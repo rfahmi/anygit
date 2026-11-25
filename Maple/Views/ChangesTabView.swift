@@ -91,8 +91,7 @@ private struct HunkStagingToolbar: View {
 struct ChangesTabView: View {
     @Bindable var state: AppState
     let availableWidth: CGFloat
-
-    private var isCompact: Bool { availableWidth < 600 }
+    @AppStorage("changesLayout") private var layout: SplitLayout = .horizontal
 
     private var blameAvailable: Bool {
         guard let file = state.selectedFileChange else { return false }
@@ -104,7 +103,7 @@ struct ChangesTabView: View {
     }
 
     var body: some View {
-        if isCompact {
+        if layout == .vertical {
             VStack(spacing: 0) {
                 StagingAreaView(state: state)
                     .frame(maxHeight: .infinity)
@@ -129,13 +128,32 @@ struct ChangesTabView: View {
             if showingConflict {
                 ConflictView(state: state, file: state.selectedFileChange)
             } else {
-                Picker("View", selection: $state.changesViewMode) {
-                    ForEach(AppState.ChangesViewMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+                HStack {
+                    Spacer()
+
+                    Picker("View", selection: $state.changesViewMode) {
+                        ForEach(AppState.ChangesViewMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+
+                    Spacer()
+
+                    Picker("Layout", selection: $layout) {
+                        ForEach(SplitLayout.allCases, id: \.self) { option in
+                            Image(systemName: option.systemImage)
+                                .help(option.helpText)
+                                .tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel("Changes layout")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .onChange(of: blameAvailable) { _, available in

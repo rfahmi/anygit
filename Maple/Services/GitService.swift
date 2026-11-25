@@ -206,7 +206,7 @@ actor GitService {
     private func logLaunchFailure(command: String, directory: String, error: Error) {
         let nsError = error as NSError
         let detail = "\(nsError.domain) code=\(nsError.code) - \(nsError.localizedDescription)"
-        FileHandle.standardError.write(Data("[Maple] process.run() failed for `git \(command)` in \(directory): \(detail)\n".utf8))
+        FileHandle.standardError.write(Data("[AnyGit] process.run() failed for `git \(command)` in \(directory): \(detail)\n".utf8))
     }
 
     // MARK: - Validate repository
@@ -437,6 +437,14 @@ actor GitService {
         return Self.parseDiff(output)
     }
 
+    func diffFilesForCommit(_ commitHash: String, in directory: String) async throws -> [DiffFile] {
+        let output = try await run(
+            ["show", "--no-color", "--format=", commitHash],
+            in: directory
+        )
+        return Self.parseDiffFiles(output)
+    }
+
     /// `git diff` skips untracked files, so we synthesize an all-additions diff
     /// by reading the file directly.
     func diffForUntrackedFile(_ filePath: String, in directory: String) async throws -> [DiffLine] {
@@ -543,7 +551,13 @@ actor GitService {
     }
 
     func unstage(file: String, in directory: String) async throws {
-        _ = try await run(["reset", "HEAD", "--", file], in: directory)
+        do {
+            _ = try await run(["reset", "HEAD", "--", file], in: directory)
+        } catch {
+            // On an unborn HEAD (initial commit), `git reset HEAD` fails;
+            // fall back to removing the entry from the index.
+            _ = try await run(["rm", "--cached", "-q", "--", file], in: directory)
+        }
     }
 
     func stageAll(in directory: String) async throws {
@@ -551,7 +565,22 @@ actor GitService {
     }
 
     func unstageAll(in directory: String) async throws {
-        _ = try await run(["reset", "HEAD"], in: directory)
+        do {
+            _ = try await run(["reset", "HEAD"], in: directory)
+        } catch {
+            _ = try await run(["rm", "-r", "--cached", "-q", "--", "."], in: directory)
+        }
+    }
+
+    /// Returns `--stat` plus a truncated staged diff suitable for on-device LLM
+    /// summarization without exceeding small context windows.
+    func stagedDiffForCommitMessage(in directory: String, maxDiffChars: Int = 6000) async throws -> String {
+        let stat = try await run(["diff", "--cached", "--stat"], in: directory)
+        let diff = try await run(["diff", "--cached", "--no-color", "--unified=2"], in: directory)
+        let trimmedDiff = diff.count > maxDiffChars
+            ? String(diff.prefix(maxDiffChars)) + "\n... (diff truncated)"
+            : diff
+        return "Files changed:\n\(stat)\nDiff:\n\(trimmedDiff)"
     }
 }
 

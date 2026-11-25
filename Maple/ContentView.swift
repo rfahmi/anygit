@@ -33,7 +33,7 @@ struct ContentView: View {
                 WelcomeView(state: state)
             }
         }
-        .navigationTitle(state.selectedRepository?.name ?? "Maple")
+        .navigationTitle(state.selectedRepository?.name ?? "AnyGit")
         .frame(minWidth: 520, minHeight: 400)
         .onChange(of: state.selectedFileChange) {
             Task {
@@ -130,6 +130,7 @@ struct DetailAreaView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
 

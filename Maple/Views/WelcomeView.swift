@@ -12,11 +12,12 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "leaf.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.green)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 80, height: 80)
 
-            Text("Maple")
+            Text("AnyGit")
                 .font(.largeTitle)
                 .fontWeight(.bold)
 

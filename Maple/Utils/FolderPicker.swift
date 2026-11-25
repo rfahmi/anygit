@@ -12,13 +12,14 @@ func openFolderPicker(state: AppState) {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
     panel.canChooseDirectories = true
-    panel.allowsMultipleSelection = false
-    panel.message = "Select a Git repository folder"
+    panel.allowsMultipleSelection = true
+    panel.message = "Select one or more Git repository folders"
     panel.prompt = "Open"
 
-    if panel.runModal() == .OK, let url = panel.url {
+    if panel.runModal() == .OK, !panel.urls.isEmpty {
+        let paths = panel.urls.map(\.path)
         Task {
-            await state.coordinator.openRepository(at: url.path)
+            await state.coordinator.openRepositories(at: paths)
         }
     }
 }

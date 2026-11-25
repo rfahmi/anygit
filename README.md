@@ -1,18 +1,12 @@
 <div align="center">
 
-# Maple
+# AnyGit
 
-[![CI](https://github.com/poolcamacho/Maple/actions/workflows/ci.yml/badge.svg)](https://github.com/poolcamacho/Maple/actions/workflows/ci.yml)
-[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)](https://www.apple.com/macos/)
+[![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-6-orange)](https://swift.org)
-[![License: MIT](https://img.shields.io/github/license/poolcamacho/Maple)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/poolcamacho/Maple?style=flat)](https://github.com/poolcamacho/Maple/stargazers)
-[![Forks](https://img.shields.io/github/forks/poolcamacho/Maple?style=flat)](https://github.com/poolcamacho/Maple/network/members)
-[![Issues](https://img.shields.io/github/issues/poolcamacho/Maple)](https://github.com/poolcamacho/Maple/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/poolcamacho/Maple?style=flat)](https://github.com/poolcamacho/Maple/commits/master)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/poolcamacho?label=Sponsor&logo=GitHub)](https://github.com/sponsors/poolcamacho)
+[![License: MIT](https://img.shields.io/github/license/rfahmi/maple-git)](LICENSE)
 
-A **free, fast, native** macOS Git client built with SwiftUI. Inspired by [GitExtensions](https://gitextensions.github.io/), designed to feel at home on macOS.
+A **free, fast, native** macOS Git client built with SwiftUI. Forked from Maple and evolved for daily personal & open-source workflows.
 
 ![Maple History tab with commit graph and diff](docs/screenshots/commit-graph.png)
 

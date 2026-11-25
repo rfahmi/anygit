@@ -91,20 +91,41 @@ struct CloneDialog: View {
 
 struct NewBranchDialog: View {
     @Bindable var state: AppState
+    var startPoint: GitCommit? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var branchName = ""
+    @State private var checkoutAfterCreate = true
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("New Branch")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 16) {
+            if let startPoint {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Create Branch at \(startPoint.shortID)")
+                        .font(.headline)
+                    Text(startPoint.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            } else {
+                Text("New Branch")
+                    .font(.headline)
+            }
 
             TextField("Branch name", text: $branchName)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 300)
+                .frame(width: 320)
                 .onSubmit { create() }
 
+            if startPoint != nil {
+                Toggle("Checkout branch after creating", isOn: $checkoutAfterCreate)
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+            }
+
             HStack(spacing: 12) {
+                Spacer()
                 Button("Cancel") {
                     dismiss()
                 }
@@ -123,11 +144,96 @@ struct NewBranchDialog: View {
     private func create() {
         let name = branchName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
+        let targetCommit = startPoint?.id
+        let shouldCheckout = startPoint == nil ? true : checkoutAfterCreate
         dismiss()
         // Delay the async work so the sheet finishes dismissing
         Task {
             try? await Task.sleep(for: .milliseconds(100))
-            await state.coordinator.createNewBranch(name: name)
+            await state.coordinator.createNewBranch(name: name, startPoint: targetCommit, checkout: shouldCheckout)
+        }
+    }
+}
+
+struct ResetToCommitDialog: View {
+    @Bindable var state: AppState
+    let commit: GitCommit
+    @Environment(\.dismiss) private var dismiss
+    @State private var mode: GitResetMode = .mixed
+
+    private var branchName: String {
+        state.selectedRepository?.currentBranch ?? "HEAD"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Reset \(branchName) to \(commit.shortID)")
+                    .font(.headline)
+                Text(commit.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(GitResetMode.allCases) { option in
+                    Button {
+                        mode = option
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: mode == option ? "largecircle.fill.circle" : "circle")
+                                .foregroundStyle(mode == option ? Color.accentColor : .secondary)
+                                .padding(.top, 2)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.title)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(option == .hard ? .red : .primary)
+                                Text(option.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                        }
+                        .padding(8)
+                        .background(
+                            mode == option ? Color.accentColor.opacity(0.1) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(width: 440)
+
+            HStack(spacing: 12) {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+
+                if mode == .hard {
+                    Button("Reset", role: .destructive) { performReset() }
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Reset") { performReset() }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(24)
+    }
+
+    private func performReset() {
+        let selectedMode = mode
+        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(100))
+            await state.coordinator.resetCurrentBranch(to: commit, mode: selectedMode)
         }
     }
 }
@@ -240,7 +346,8 @@ struct MergeDialog: View {
             Picker("Branch", selection: $selected) {
                 Text("Choose a branch…").tag("")
                 ForEach(candidateBranches) { branch in
-                    Text(branch.isRemote ? "📡 \(branch.name)" : branch.name).tag(branch.name)
+                    Label(branch.name, systemImage: branch.isRemote ? "globe" : "arrow.triangle.branch")
+                        .tag(branch.name)
                 }
             }
             .pickerStyle(.menu)
@@ -294,7 +401,8 @@ struct RebaseDialog: View {
             Picker("Onto", selection: $selected) {
                 Text("Choose a branch…").tag("")
                 ForEach(candidateBranches) { branch in
-                    Text(branch.isRemote ? "📡 \(branch.name)" : branch.name).tag(branch.name)
+                    Label(branch.name, systemImage: branch.isRemote ? "globe" : "arrow.triangle.branch")
+                        .tag(branch.name)
                 }
             }
             .pickerStyle(.menu)

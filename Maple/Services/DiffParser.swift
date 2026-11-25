@@ -85,8 +85,16 @@ nonisolated enum DiffParser {
             if raw.hasPrefix("diff --git") {
                 flushFile()
                 currentPreamble = [raw]
+                if let range = raw.range(of: " b/") {
+                    currentPath = String(raw[range.upperBound...])
+                }
             } else if DiffParser.isPreambleLine(raw) {
                 currentPreamble.append(raw)
+                if raw.hasPrefix("rename to ") {
+                    currentPath = String(raw.dropFirst("rename to ".count))
+                } else if raw.hasPrefix("--- a/"), currentPath == nil {
+                    currentPath = String(raw.dropFirst("--- a/".count))
+                }
             } else if raw.hasPrefix("+++ ") {
                 currentPreamble.append(raw)
                 capturePath(from: raw)

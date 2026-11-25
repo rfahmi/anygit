@@ -10,6 +10,20 @@ import SwiftUI
 struct CommitHistoryView: View {
     @Bindable var state: AppState
     var availableWidth: CGFloat = 800
+    @Binding var layout: SplitLayout
+
+    @State private var branchTargetCommit: GitCommit?
+    @State private var resetTargetCommit: GitCommit?
+
+    init(
+        state: AppState,
+        availableWidth: CGFloat = 800,
+        layout: Binding<SplitLayout> = .constant(.vertical)
+    ) {
+        self.state = state
+        self.availableWidth = availableWidth
+        self._layout = layout
+    }
 
     private var showAuthor: Bool { availableWidth > 550 }
     private var showDate: Bool { availableWidth > 450 }
@@ -37,6 +51,17 @@ struct CommitHistoryView: View {
                 Text("\(commits.count) commits")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Picker("Layout", selection: $layout) {
+                    ForEach(SplitLayout.allCases, id: \.self) { option in
+                        Image(systemName: option.systemImage)
+                            .help(option.helpText)
+                            .tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityLabel("History layout")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -87,9 +112,30 @@ struct CommitHistoryView: View {
                     )
                     .tag(commit)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .contextMenu {
+                        Button {
+                            branchTargetCommit = commit
+                        } label: {
+                            Label("Create branch at commit…", systemImage: "arrow.triangle.branch")
+                        }
+
+                        if let branch = state.selectedRepository?.currentBranch {
+                            Button {
+                                resetTargetCommit = commit
+                            } label: {
+                                Label("Reset \(branch) to this commit…", systemImage: "arrow.counterclockwise")
+                            }
+                        }
+                    }
                 }
             }
             .listStyle(.plain)
+        }
+        .sheet(item: $branchTargetCommit) { commit in
+            NewBranchDialog(state: state, startPoint: commit)
+        }
+        .sheet(item: $resetTargetCommit) { commit in
+            ResetToCommitDialog(state: state, commit: commit)
         }
     }
 }

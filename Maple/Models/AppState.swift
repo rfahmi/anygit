@@ -28,7 +28,7 @@ final class AppState {
     /// `+` / `-` lines within that hunk's `lines` array. A hunk with every
     /// modifiable line selected behaves identically to whole-hunk selection.
     var selectedLines: [Int: Set<Int>] = [:]
-    var commitDiffLines: [DiffLine] = []
+    var commitDiffFiles: [DiffFile] = []
     var currentBlameLines: [BlameLine] = []
     var changesViewMode: ChangesViewMode = .diff
     var operationState: RepoOperationState = .idle

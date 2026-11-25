@@ -6,12 +6,18 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct StagingAreaView: View {
     @Bindable var state: AppState
     @State private var commitMessage: String = ""
     @State private var amendMode: Bool = false
+    @State private var isGeneratingMessage: Bool = false
     @State private var activeSection: String = "unstaged"
+    @AppStorage("unstagedSplitRatio") private var splitRatio: Double = 0.5
+    @State private var dragStartRatio: Double?
+    @State private var isUnstagedCollapsed: Bool = false
+    @State private var isStagedCollapsed: Bool = false
 
     private var stagedFiles: [GitFileChange] {
         state.filteredFileChanges.filter { $0.isStaged }
@@ -34,35 +40,77 @@ struct StagingAreaView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                FileChangeSection(
-                    title: "Unstaged Changes",
-                    count: unstagedFiles.count,
-                    files: unstagedFiles,
-                    selectedFile: $state.selectedFileChange,
-                    sectionID: "unstaged",
-                    activeSection: $activeSection,
-                    actionIcon: "plus.circle.fill",
-                    actionColor: .green,
-                    onAction: { file in Task { await state.coordinator.stageFile(file) } },
-                    bulkActionLabel: "Stage All",
-                    onBulkAction: { Task { await state.coordinator.stageAllFiles() } }
-                )
+                GeometryReader { geometry in
+                    let totalHeight = geometry.size.height
+                    let dividerHeight: CGFloat = 7
+                    let bothExpanded = !isUnstagedCollapsed && !isStagedCollapsed
+                    let usableHeight = max(120, totalHeight - dividerHeight)
+                    let unstagedHeight = min(max(60, usableHeight * splitRatio), usableHeight - 60)
+                    let stagedHeight = max(60, usableHeight - unstagedHeight)
 
-                Divider()
+                    VStack(spacing: 0) {
+                        FileChangeSection(
+                            title: "Unstaged Changes",
+                            count: unstagedFiles.count,
+                            files: unstagedFiles,
+                            selectedFile: $state.selectedFileChange,
+                            sectionID: "unstaged",
+                            activeSection: $activeSection,
+                            isCollapsed: $isUnstagedCollapsed,
+                            actionIcon: "plus.circle.fill",
+                            actionColor: .green,
+                            onAction: { file in Task { await state.coordinator.stageFile(file) } },
+                            bulkActionLabel: "Stage All",
+                            onBulkAction: { Task { await state.coordinator.stageAllFiles() } }
+                        )
+                        .frame(height: bothExpanded ? unstagedHeight : nil)
+                        .frame(maxHeight: (!isUnstagedCollapsed && isStagedCollapsed) ? .infinity : nil)
 
-                FileChangeSection(
-                    title: "Staged Changes",
-                    count: stagedFiles.count,
-                    files: stagedFiles,
-                    selectedFile: $state.selectedFileChange,
-                    sectionID: "staged",
-                    activeSection: $activeSection,
-                    actionIcon: "minus.circle.fill",
-                    actionColor: .red,
-                    onAction: { file in Task { await state.coordinator.unstageFile(file) } },
-                    bulkActionLabel: "Unstage All",
-                    onBulkAction: { Task { await state.coordinator.unstageAllFiles() } }
-                )
+                        if bothExpanded {
+                            SplitResizeHandle(
+                                onDragChanged: { translationY in
+                                    let start = dragStartRatio ?? splitRatio
+                                    if dragStartRatio == nil {
+                                        dragStartRatio = start
+                                    }
+                                    let delta = Double(translationY / max(1, usableHeight))
+                                    splitRatio = min(max(start + delta, 0.15), 0.85)
+                                },
+                                onDragEnded: {
+                                    dragStartRatio = nil
+                                },
+                                onDoubleClick: {
+                                    splitRatio = 0.5
+                                }
+                            )
+                            .frame(height: dividerHeight)
+                        } else {
+                            Divider()
+                        }
+
+                        FileChangeSection(
+                            title: "Staged Changes",
+                            count: stagedFiles.count,
+                            files: stagedFiles,
+                            selectedFile: $state.selectedFileChange,
+                            sectionID: "staged",
+                            activeSection: $activeSection,
+                            isCollapsed: $isStagedCollapsed,
+                            actionIcon: "minus.circle.fill",
+                            actionColor: .red,
+                            onAction: { file in Task { await state.coordinator.unstageFile(file) } },
+                            bulkActionLabel: "Unstage All",
+                            onBulkAction: { Task { await state.coordinator.unstageAllFiles() } }
+                        )
+                        .frame(height: bothExpanded ? stagedHeight : nil)
+                        .frame(maxHeight: (isUnstagedCollapsed && !isStagedCollapsed) ? .infinity : nil)
+
+                        if isUnstagedCollapsed && isStagedCollapsed {
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .frame(maxHeight: .infinity)
 
                 Divider()
 
@@ -92,11 +140,38 @@ struct StagingAreaView: View {
 
                         Spacer()
 
+                        Button {
+                            isGeneratingMessage = true
+                            Task {
+                                if let generated = await state.coordinator.generateCommitMessage() {
+                                    commitMessage = generated
+                                }
+                                isGeneratingMessage = false
+                            }
+                        } label: {
+                            if isGeneratingMessage {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "sparkles")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Generate commit message with Apple Intelligence")
+                        .accessibilityLabel("Generate commit message")
+                        .disabled(stagedFiles.isEmpty || state.operationInProgress || isGeneratingMessage)
+
                         Button(action: {
                             let msg = commitMessage
                             let amend = amendMode
-                            commitMessage = ""
-                            Task { await state.coordinator.performCommit(message: msg, amend: amend) }
+                            Task {
+                                let ok = await state.coordinator.performCommit(message: msg, amend: amend)
+                                if ok {
+                                    commitMessage = ""
+                                    amendMode = false
+                                }
+                            }
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.circle.fill")
@@ -106,7 +181,11 @@ struct StagingAreaView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .keyboardShortcut(.return, modifiers: .command)
-                        .disabled((stagedFiles.isEmpty && !amendMode) || commitMessage.isEmpty || state.operationInProgress)
+                        .disabled(
+                            (stagedFiles.isEmpty && !amendMode)
+                            || commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || state.operationInProgress
+                        )
                     }
                 }
                 .padding(10)
@@ -122,6 +201,7 @@ struct FileChangeSection: View {
     @Binding var selectedFile: GitFileChange?
     let sectionID: String
     @Binding var activeSection: String
+    @Binding var isCollapsed: Bool
     let actionIcon: String
     let actionColor: Color
     let onAction: (GitFileChange) -> Void
@@ -143,18 +223,31 @@ struct FileChangeSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
+            HStack(spacing: 6) {
+                Button {
+                    isCollapsed.toggle()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 10)
 
-                Text("\(count)")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(.quaternary, in: Capsule())
+                        Text(title)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+
+                        Text("\(count)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
                 Spacer()
 
@@ -170,18 +263,59 @@ struct FileChangeSection: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
 
-            List(selection: sectionSelection) {
-                ForEach(files) { file in
-                    FileChangeRow(file: file, actionIcon: actionIcon, actionColor: actionColor) {
-                        onAction(file)
+            if !isCollapsed {
+                List(selection: sectionSelection) {
+                    ForEach(files) { file in
+                        FileChangeRow(file: file, actionIcon: actionIcon, actionColor: actionColor) {
+                            onAction(file)
+                        }
+                        .tag(file)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
                     }
-                    .tag(file)
-                    .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
                 }
+                .listStyle(.plain)
+                .frame(minHeight: 30)
             }
-            .listStyle(.plain)
-            .frame(minHeight: 50)
         }
+    }
+}
+
+private struct SplitResizeHandle: View {
+    let onDragChanged: (CGFloat) -> Void
+    let onDragEnded: () -> Void
+    let onDoubleClick: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        ZStack {
+            Divider()
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(isHovering ? Color.secondary.opacity(0.6) : Color.secondary.opacity(0.25))
+                .frame(width: 28, height: 3)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeUpDown.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .onTapGesture(count: 2) {
+            onDoubleClick()
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    onDragChanged(value.translation.height)
+                }
+                .onEnded { _ in
+                    onDragEnded()
+                }
+        )
     }
 }
 

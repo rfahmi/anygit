@@ -114,8 +114,72 @@ struct SidebarRepoRow: View {
                 }
                 .foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 4)
+
+            Menu {
+                OpenInMenuItems(repositoryPath: repository.path)
+            } label: {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .tint(.secondary)
+            .fixedSize()
+            .help("Open in IDE or App")
+            .accessibilityLabel("Open \(repository.name) in IDE")
         }
         .padding(.vertical, 2)
+        .contextMenu {
+            Menu("Open in") {
+                OpenInMenuItems(repositoryPath: repository.path)
+            }
+        }
+    }
+}
+
+private struct OpenInMenuItems: View {
+    let repositoryPath: String
+
+    var body: some View {
+        let editors = RepoOpener.installedEditors()
+        let terminals = RepoOpener.installedTerminals()
+
+        ForEach(editors) { app in
+            Button {
+                RepoOpener.openRepository(at: repositoryPath, with: app.url)
+            } label: {
+                Label(app.name, systemImage: app.systemImage)
+            }
+        }
+
+        if !editors.isEmpty && !terminals.isEmpty {
+            Divider()
+        }
+
+        ForEach(terminals) { app in
+            Button {
+                RepoOpener.openRepository(at: repositoryPath, with: app.url)
+            } label: {
+                Label(app.name, systemImage: app.systemImage)
+            }
+        }
+
+        Divider()
+
+        Button {
+            RepoOpener.revealInFinder(path: repositoryPath)
+        } label: {
+            Label("Finder", systemImage: "folder")
+        }
+
+        Button {
+            RepoOpener.chooseOtherAppAndOpen(repositoryPath: repositoryPath)
+        } label: {
+            Label("Other App…", systemImage: "ellipsis.circle")
+        }
     }
 }
 
