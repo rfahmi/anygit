@@ -213,9 +213,9 @@ final class GitCoordinator {
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)
             async let tagTask = git.tags(in: path)
-            async let unpushedTask = git.unpushedCommitCount(in: path)
+            async let unpushedTask = git.unpushedCommitIDs(in: path)
 
-            let (status, log, branchList, branch, stashList, tagList, unpushedCount) = try await (
+            let (status, log, branchList, branch, stashList, tagList, unpushedIDs) = try await (
                 statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask, unpushedTask
             )
 
@@ -229,7 +229,7 @@ final class GitCoordinator {
             state.branches = branchList
             state.stashes = stashList
             state.tags = tagList
-            state.unpushedCommitCount = unpushedCount
+            state.unpushedCommitIDs = unpushedIDs
             state.operationState = git.detectOperationState(in: path)
 
             if let index = state.repositories.firstIndex(where: { $0.path == path }) {
@@ -264,9 +264,9 @@ final class GitCoordinator {
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)
             async let tagTask = git.tags(in: path)
-            async let unpushedTask = git.unpushedCommitCount(in: path)
+            async let unpushedTask = git.unpushedCommitIDs(in: path)
 
-            let (status, log, branchList, branch, stashList, tagList, unpushedCount) = try await (
+            let (status, log, branchList, branch, stashList, tagList, unpushedIDs) = try await (
                 statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask, unpushedTask
             )
 
@@ -279,7 +279,7 @@ final class GitCoordinator {
             state.branches = branchList
             state.stashes = stashList
             state.tags = tagList
-            state.unpushedCommitCount = unpushedCount
+            state.unpushedCommitIDs = unpushedIDs
             state.operationState = git.detectOperationState(in: path)
 
             if let index = state.repositories.firstIndex(where: { $0.path == path }) {

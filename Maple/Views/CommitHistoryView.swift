@@ -115,6 +115,8 @@ struct CommitHistoryView: View {
                     CommitRow(
                         commit: commit,
                         rowIndex: index,
+                        commits: commits,
+                        unpushedCommitIDs: state.unpushedCommitIDs,
                         layout: currentLayout,
                         graphWidth: graphW,
                         laneWidth: laneWidth,
@@ -156,6 +158,8 @@ struct CommitHistoryView: View {
 struct CommitRow: View {
     let commit: GitCommit
     let rowIndex: Int
+    let commits: [GitCommit]
+    let unpushedCommitIDs: Set<String>
     let layout: CommitGraphLayout
     let graphWidth: CGFloat
     let laneWidth: CGFloat
@@ -193,6 +197,8 @@ struct CommitRow: View {
         HStack(spacing: 0) {
             CommitGraphRowCanvas(
                 rowIndex: rowIndex,
+                commits: commits,
+                unpushedCommitIDs: unpushedCommitIDs,
                 layout: layout,
                 laneWidth: laneWidth,
                 rowHeight: rowHeight
@@ -239,6 +245,8 @@ struct CommitRow: View {
 
 struct CommitGraphRowCanvas: View {
     let rowIndex: Int
+    let commits: [GitCommit]
+    let unpushedCommitIDs: Set<String>
     let layout: CommitGraphLayout
     let laneWidth: CGFloat
     let rowHeight: CGFloat
@@ -263,8 +271,15 @@ struct CommitGraphRowCanvas: View {
                 let toX = xFor(lane: edge.toLane)
                 let color = CommitGraphColors.color(forLane: edge.toLane)
                 let path = edgePath(from: fromX, to: toX, edgeFromRow: edge.fromRow, edgeToRow: edge.toRow)
+                let isUnpushedEdge = edge.fromRow >= 0
+                    && edge.fromRow < commits.count
+                    && unpushedCommitIDs.contains(commits[edge.fromRow].id)
 
-                context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: edgeWidth, lineCap: .round))
+                let style = isUnpushedEdge
+                    ? StrokeStyle(lineWidth: edgeWidth, lineCap: .round, dash: [2.5, 3.5])
+                    : StrokeStyle(lineWidth: edgeWidth, lineCap: .round)
+
+                context.stroke(path, with: .color(color), style: style)
             }
 
             if let node = layout.node(atRow: rowIndex) {

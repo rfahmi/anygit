@@ -53,14 +53,16 @@ extension GitService {
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
-    /// Number of local commits on HEAD not yet pushed to its upstream (or any remote).
-    func unpushedCommitCount(in directory: String) async -> Int {
+    /// Commit SHAs on HEAD not yet pushed to its upstream (or any remote).
+    func unpushedCommitIDs(in directory: String) async -> Set<String> {
+        let args: [String]
         if await upstreamBranch(in: directory) != nil {
-            let out = (try? await run(["rev-list", "--count", "@{u}..HEAD"], in: directory)) ?? ""
-            return Int(out.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+            args = ["rev-list", "@{u}..HEAD"]
+        } else {
+            args = ["rev-list", "HEAD", "--not", "--remotes"]
         }
-        let out = (try? await run(["rev-list", "--count", "HEAD", "--not", "--remotes"], in: directory)) ?? ""
-        return Int(out.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        let out = (try? await run(args, in: directory)) ?? ""
+        return Set(out.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
     }
 
     /// Configured remote names, in git's listing order.

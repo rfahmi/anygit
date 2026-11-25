@@ -47,7 +47,8 @@ final class AppState {
 
     var searchText: String = ""
     var currentTab: DetailTab = .changes
-    var unpushedCommitCount: Int = 0
+    var unpushedCommitIDs: Set<String> = []
+    var unpushedCommitCount: Int { unpushedCommitIDs.count }
 
     /// Set when a push is requested on a branch with no upstream; drives the
     /// "set upstream and push" confirmation.

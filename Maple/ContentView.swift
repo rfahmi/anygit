@@ -124,17 +124,10 @@ struct DetailAreaView: View {
                     ProgressView("Loading repository...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    Picker("View", selection: $state.currentTab) {
-                        ForEach(AppState.DetailTab.allCases, id: \.self) { tab in
-                            if tab == .history && state.unpushedCommitCount > 0 {
-                                Text("\(tab.rawValue) (\(state.unpushedCommitCount))").tag(tab)
-                            } else {
-                                Text(tab.rawValue).tag(tab)
-                            }
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    DetailTabBar(
+                        selection: $state.currentTab,
+                        unpushedCommitCount: state.unpushedCommitCount
+                    )
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
 
@@ -177,6 +170,53 @@ struct DetailAreaView: View {
                 }
             }
         }
+    }
+}
+
+private struct DetailTabBar: View {
+    @Binding var selection: AppState.DetailTab
+    let unpushedCommitCount: Int
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(AppState.DetailTab.allCases, id: \.self) { tab in
+                let isSelected = selection == tab
+
+                Button {
+                    selection = tab
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(tab.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(isSelected ? .semibold : .regular)
+
+                        if tab == .history && unpushedCommitCount > 0 {
+                            Text("\(unpushedCommitCount)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(isSelected ? .white : .orange)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(
+                                    isSelected ? Color.white.opacity(0.22) : Color.orange.opacity(0.18),
+                                    in: Capsule()
+                                )
+                        }
+                    }
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(
+                        isSelected ? Color.accentColor : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
