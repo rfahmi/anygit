@@ -257,12 +257,14 @@ final class GitCoordinator {
 
         do {
             async let statusTask = git.status(in: path)
+            async let logTask = git.log(in: path)
             async let branchTask = git.branches(in: path)
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)
+            async let tagTask = git.tags(in: path)
 
-            let (status, branchList, branch, stashList) = try await (
-                statusTask, branchTask, currentBranchTask, stashTask
+            let (status, log, branchList, branch, stashList, tagList) = try await (
+                statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask
             )
 
             // Drop results if the selected repo changed mid-refresh (e.g. a
@@ -270,8 +272,10 @@ final class GitCoordinator {
             guard state.currentRepoPath == path else { return }
 
             state.fileChanges = status
+            state.commits = log
             state.branches = branchList
             state.stashes = stashList
+            state.tags = tagList
             state.operationState = git.detectOperationState(in: path)
 
             if let index = state.repositories.firstIndex(where: { $0.path == path }) {

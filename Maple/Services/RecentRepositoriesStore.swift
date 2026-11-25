@@ -20,8 +20,14 @@ struct RecentRepositoriesStore {
         static let selected = "selectedRepositoryPath"
     }
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(defaults: UserDefaults? = nil) {
+        if let defaults {
+            self.defaults = defaults
+        } else if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            self.defaults = UserDefaults(suiteName: "com.rfahmi.AnyGit.tests") ?? .standard
+        } else {
+            self.defaults = .standard
+        }
     }
 
     /// Open repository paths, in order, de-duplicated and capped.
