@@ -21,6 +21,7 @@ jobs:
     runs-on: macos-26
     env:
       HAS_SIGNING_CERTS: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' && secrets.APPLE_TEAM_ID != '' }}
+      HAS_NOTARY_CREDS: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -117,7 +118,7 @@ jobs:
             "$APP_PATH"
 
       - name: Notarize and staple .dmg
-        if: env.HAS_SIGNING_CERTS == 'true' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != ''
+        if: env.HAS_SIGNING_CERTS == 'true' && env.HAS_NOTARY_CREDS == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
