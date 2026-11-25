@@ -238,6 +238,7 @@ final class GitCoordinator {
             }
 
             state.selectedCommit = nil
+            state.selectedCommits = []
             state.selectedFileChange = nil
             state.currentDiffLines = []
             state.currentDiffFile = nil
@@ -630,6 +631,51 @@ extension GitCoordinator {
             }
         ) { path in
             try await git.rebaseContinue(in: path)
+        }
+    }
+
+    func performCherryPick(commits: [GitCommit]) async {
+        guard !commits.isEmpty else { return }
+        let hashes = commits.map(\.id)
+        let label = commits.count == 1 ? commits[0].shortID : "\(commits.count) commits"
+        await runOperation(
+            refresh: .load,
+            success: "Cherry-picked \(label)",
+            errorHandler: { [weak self] error in
+                guard let self else { return }
+                await self.loadRepositoryData()
+                if self.state.operationState.isInProgress {
+                    self.state.errorMessage = "Cherry-pick has conflicts. Resolve them and click Continue."
+                } else {
+                    self.state.errorMessage = error.localizedDescription
+                }
+            }
+        ) { path in
+            try await git.cherryPick(commits: hashes, in: path)
+        }
+    }
+
+    func abortCherryPick() async {
+        await runOperation(refresh: .load, success: "Cherry-pick aborted") { path in
+            try await git.cherryPickAbort(in: path)
+        }
+    }
+
+    func continueCherryPick() async {
+        await runOperation(
+            refresh: .load,
+            success: "Cherry-pick continued",
+            errorHandler: { [weak self] error in
+                guard let self else { return }
+                await self.loadRepositoryData()
+                if self.state.operationState.isInProgress {
+                    self.state.errorMessage = "More conflicts remain. Resolve them and click Continue."
+                } else {
+                    self.state.errorMessage = error.localizedDescription
+                }
+            }
+        ) { path in
+            try await git.cherryPickContinue(in: path)
         }
     }
 

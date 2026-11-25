@@ -50,6 +50,21 @@ extension GitService {
         _ = try await run(["rebase", "--skip"], in: directory)
     }
 
+    // MARK: - Cherry-pick
+
+    func cherryPick(commits: [String], in directory: String) async throws {
+        guard !commits.isEmpty else { return }
+        _ = try await run(["cherry-pick"] + commits, in: directory)
+    }
+
+    func cherryPickAbort(in directory: String) async throws {
+        _ = try await run(["cherry-pick", "--abort"], in: directory)
+    }
+
+    func cherryPickContinue(in directory: String) async throws {
+        _ = try await run(["-c", "core.editor=true", "cherry-pick", "--continue"], in: directory)
+    }
+
     // MARK: - Conflict resolution helpers
 
     /// Use "ours" version of the file (current branch) for conflict resolution.

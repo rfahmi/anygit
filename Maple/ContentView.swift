@@ -43,6 +43,9 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: state.selectedCommits) { _, newSelection in
+            state.selectedCommit = newSelection.count == 1 ? newSelection.first : nil
+        }
         .onChange(of: state.selectedCommit) {
             Task { await state.coordinator.loadCommitDiff() }
         }

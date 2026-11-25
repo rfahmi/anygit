@@ -15,6 +15,7 @@ final class AppState {
     var repositories: [GitRepository] = []
     var selectedRepository: GitRepository?
     var selectedCommit: GitCommit?
+    var selectedCommits: Set<GitCommit> = []
     var selectedFileChange: GitFileChange?
 
     var commits: [GitCommit] = []

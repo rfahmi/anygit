@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct CommitHistoryView: View {
     @Bindable var state: AppState
@@ -14,6 +15,7 @@ struct CommitHistoryView: View {
 
     @State private var branchTargetCommit: GitCommit?
     @State private var resetTargetCommit: GitCommit?
+    @State private var detailsTargetCommit: GitCommit?
 
     init(
         state: AppState,
@@ -34,6 +36,16 @@ struct CommitHistoryView: View {
 
     private var visibleCommits: [GitCommit] {
         state.filteredCommits
+    }
+
+    /// Returns selected commits in oldest-to-newest order when the right-clicked
+    /// commit is part of a multi-selection, or just `[clicked]` otherwise.
+    private func cherryPickTargets(clicked: GitCommit, in commits: [GitCommit]) -> [GitCommit] {
+        guard state.selectedCommits.contains(clicked), state.selectedCommits.count > 1 else {
+            return [clicked]
+        }
+        // `commits` is newest-first, so reversing index order replays oldest-first.
+        return commits.reversed().filter { state.selectedCommits.contains($0) }
     }
 
     var body: some View {
@@ -110,7 +122,7 @@ struct CommitHistoryView: View {
 
             Divider()
 
-            List(selection: $state.selectedCommit) {
+            List(selection: $state.selectedCommits) {
                 ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
                     CommitRow(
                         commit: commit,
@@ -125,20 +137,52 @@ struct CommitHistoryView: View {
                         showDate: showDate,
                         showSHA: showSHA
                     )
+                    .id("\(commit.id)-\(commit.refs.joined(separator: ","))")
                     .tag(commit)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                     .contextMenu {
+                        let targets = cherryPickTargets(clicked: commit, in: commits)
                         Button {
-                            branchTargetCommit = commit
+                            Task { await state.coordinator.performCherryPick(commits: targets) }
                         } label: {
-                            Label("Create branch at commit…", systemImage: "arrow.triangle.branch")
+                            let label = targets.count == 1
+                                ? "Cherry-pick \(targets[0].shortID)"
+                                : "Cherry-pick \(targets.count) commits"
+                            Label(label, systemImage: "arrow.uturn.right")
                         }
+                        .disabled(state.operationInProgress)
 
-                        if let branch = state.selectedRepository?.currentBranch {
+                        if targets.count == 1 {
+                            Divider()
+
                             Button {
-                                resetTargetCommit = commit
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(commit.id, forType: .string)
+                                state.successMessage = "Copied \(commit.shortID)"
                             } label: {
-                                Label("Reset \(branch) to this commit…", systemImage: "arrow.counterclockwise")
+                                Label("Copy Commit ID", systemImage: "doc.on.doc")
+                            }
+
+                            Button {
+                                detailsTargetCommit = commit
+                            } label: {
+                                Label("Commit Details…", systemImage: "info.circle")
+                            }
+
+                            Divider()
+
+                            Button {
+                                branchTargetCommit = commit
+                            } label: {
+                                Label("Create branch at commit…", systemImage: "arrow.triangle.branch")
+                            }
+
+                            if let branch = state.selectedRepository?.currentBranch {
+                                Button {
+                                    resetTargetCommit = commit
+                                } label: {
+                                    Label("Reset \(branch) to this commit…", systemImage: "arrow.counterclockwise")
+                                }
                             }
                         }
                     }
@@ -151,6 +195,9 @@ struct CommitHistoryView: View {
         }
         .sheet(item: $resetTargetCommit) { commit in
             ResetToCommitDialog(state: state, commit: commit)
+        }
+        .sheet(item: $detailsTargetCommit) { commit in
+            CommitDetailsDialog(state: state, commit: commit)
         }
     }
 }
@@ -276,7 +323,7 @@ struct CommitGraphRowCanvas: View {
                     && unpushedCommitIDs.contains(commits[edge.fromRow].id)
 
                 let style = isUnpushedEdge
-                    ? StrokeStyle(lineWidth: edgeWidth, lineCap: .round, dash: [2.5, 3.5])
+                    ? StrokeStyle(lineWidth: edgeWidth, lineCap: .round, dash: [0.01, 5.0])
                     : StrokeStyle(lineWidth: edgeWidth, lineCap: .round)
 
                 context.stroke(path, with: .color(color), style: style)
@@ -354,7 +401,17 @@ struct CommitGraphRowCanvas: View {
                 width: nodeDiameter,
                 height: nodeDiameter
             )
-            context.fill(Path(ellipseIn: rect), with: .color(color))
+            let isUnpushedNode = rowIndex >= 0
+                && rowIndex < commits.count
+                && unpushedCommitIDs.contains(commits[rowIndex].id)
+            if isUnpushedNode {
+                var clearContext = context
+                clearContext.blendMode = .clear
+                clearContext.fill(Path(ellipseIn: rect), with: .color(.black))
+                context.stroke(Path(ellipseIn: rect), with: .color(color), lineWidth: 2.0)
+            } else {
+                context.fill(Path(ellipseIn: rect), with: .color(color))
+            }
         }
     }
 }

@@ -420,6 +420,48 @@ actor GitService {
         return result
     }
 
+    func commitDetails(for commitHash: String, in directory: String) async throws -> GitCommitDetails {
+        let separator = "<MAPLE_SEP>"
+        let format = ["%H", "%h", "%an", "%ae", "%ad", "%cn", "%ce", "%cd", "%P", "%D", "%B"].joined(separator: separator)
+        let metaOutput = try await run(
+            ["show", "--no-patch", "--date=format:%Y-%m-%d %H:%M:%S %z", "--format=\(format)", commitHash],
+            in: directory
+        )
+        let statOutput = (try? await run(
+            ["show", "--no-patch", "--stat", "--format=", commitHash],
+            in: directory
+        )) ?? ""
+
+        let parts = metaOutput.components(separatedBy: separator)
+        let sha = parts.count > 0 ? parts[0] : commitHash
+        let shortSHA = parts.count > 1 ? parts[1] : String(commitHash.prefix(7))
+        let authorName = parts.count > 2 ? parts[2] : ""
+        let authorEmail = parts.count > 3 ? parts[3] : ""
+        let authorDate = parts.count > 4 ? parts[4] : ""
+        let committerName = parts.count > 5 ? parts[5] : ""
+        let committerEmail = parts.count > 6 ? parts[6] : ""
+        let committerDate = parts.count > 7 ? parts[7] : ""
+        let parents = parts.count > 8 ? parts[8].components(separatedBy: " ").filter { !$0.isEmpty } : []
+        let refsRaw = parts.count > 9 ? parts[9] : ""
+        let fullMessage = (parts.count > 10 ? parts[10...] .joined(separator: separator) : "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return GitCommitDetails(
+            sha: sha,
+            shortSHA: shortSHA,
+            authorName: authorName,
+            authorEmail: authorEmail,
+            authorDate: authorDate,
+            committerName: committerName,
+            committerEmail: committerEmail,
+            committerDate: committerDate,
+            parents: parents,
+            refs: Self.parseAllBranchesFromRefs(refsRaw),
+            fullMessage: fullMessage,
+            statSummary: statOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
     // MARK: - Diff
 
     func diff(for filePath: String, staged: Bool, in directory: String) async throws -> [DiffLine] {

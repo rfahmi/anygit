@@ -52,6 +52,21 @@ struct GitCommit: Identifiable, Sendable {
     }
 }
 
+nonisolated struct GitCommitDetails: Sendable {
+    let sha: String
+    let shortSHA: String
+    let authorName: String
+    let authorEmail: String
+    let authorDate: String
+    let committerName: String
+    let committerEmail: String
+    let committerDate: String
+    let parents: [String]
+    let refs: [String]
+    let fullMessage: String
+    let statSummary: String
+}
+
 nonisolated struct GitFileChange: Identifiable, Hashable, Sendable {
     let id: String
     let path: String

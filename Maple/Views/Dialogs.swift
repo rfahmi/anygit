@@ -438,3 +438,118 @@ struct RebaseDialog: View {
         }
     }
 }
+
+struct CommitDetailsDialog: View {
+    @Bindable var state: AppState
+    let commit: GitCommit
+    @Environment(\.dismiss) private var dismiss
+    @State private var details: GitCommitDetails?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Commit Details")
+                    .font(.headline)
+                Spacer()
+                Button("Copy SHA") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(commit.id, forType: .string)
+                    state.successMessage = "Copied \(commit.shortID)"
+                }
+                .controlSize(.small)
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .controlSize(.small)
+            }
+
+            Divider()
+
+            if let details {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+                            detailRow("Commit", value: details.sha, monospaced: true)
+                            detailRow("Author", value: "\(details.authorName) <\(details.authorEmail)>")
+                            detailRow("Author Date", value: details.authorDate)
+                            if details.committerName != details.authorName
+                                || details.committerEmail != details.authorEmail
+                                || details.committerDate != details.authorDate {
+                                detailRow("Committer", value: "\(details.committerName) <\(details.committerEmail)>")
+                                detailRow("Commit Date", value: details.committerDate)
+                            }
+                            if !details.parents.isEmpty {
+                                detailRow("Parents", value: details.parents.joined(separator: "\n"), monospaced: true)
+                            }
+                            if !details.refs.isEmpty {
+                                detailRow("Refs", value: details.refs.joined(separator: ", "), monospaced: true)
+                            }
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Message")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                            Text(details.fullMessage)
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                        }
+
+                        if !details.statSummary.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Files Changed")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.secondary)
+                                Text(details.statSummary)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(10)
+                                    .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                            }
+                        }
+                    }
+                }
+            } else if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProgressView("Loading commit details…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .padding(20)
+        .frame(width: 560, height: 460)
+        .task {
+            guard let path = state.currentRepoPath else { return }
+            do {
+                details = try await state.git.commitDetails(for: commit.id, in: path)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func detailRow(_ label: String, value: String, monospaced: Bool = false) -> some View {
+        GridRow {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: 85, alignment: .trailing)
+            Text(value)
+                .font(monospaced ? .system(.caption, design: .monospaced) : .callout)
+                .textSelection(.enabled)
+        }
+    }
+}

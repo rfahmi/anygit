@@ -67,6 +67,7 @@ struct OperationBanner: View {
                     switch state.operationState {
                     case .merging: await state.coordinator.continueMerge()
                     case .rebasing: await state.coordinator.continueRebase()
+                    case .cherryPicking: await state.coordinator.continueCherryPick()
                     default: break
                     }
                 }
@@ -91,6 +92,7 @@ struct OperationBanner: View {
                     switch state.operationState {
                     case .merging: await state.coordinator.abortMerge()
                     case .rebasing: await state.coordinator.abortRebase()
+                    case .cherryPicking: await state.coordinator.abortCherryPick()
                     default: break
                     }
                 }
