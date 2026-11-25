@@ -213,9 +213,10 @@ final class GitCoordinator {
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)
             async let tagTask = git.tags(in: path)
+            async let unpushedTask = git.unpushedCommitCount(in: path)
 
-            let (status, log, branchList, branch, stashList, tagList) = try await (
-                statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask
+            let (status, log, branchList, branch, stashList, tagList, unpushedCount) = try await (
+                statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask, unpushedTask
             )
 
             // The selection can change while these awaits are in flight (fast
@@ -228,6 +229,7 @@ final class GitCoordinator {
             state.branches = branchList
             state.stashes = stashList
             state.tags = tagList
+            state.unpushedCommitCount = unpushedCount
             state.operationState = git.detectOperationState(in: path)
 
             if let index = state.repositories.firstIndex(where: { $0.path == path }) {
@@ -262,9 +264,10 @@ final class GitCoordinator {
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)
             async let tagTask = git.tags(in: path)
+            async let unpushedTask = git.unpushedCommitCount(in: path)
 
-            let (status, log, branchList, branch, stashList, tagList) = try await (
-                statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask
+            let (status, log, branchList, branch, stashList, tagList, unpushedCount) = try await (
+                statusTask, logTask, branchTask, currentBranchTask, stashTask, tagTask, unpushedTask
             )
 
             // Drop results if the selected repo changed mid-refresh (e.g. a
@@ -276,6 +279,7 @@ final class GitCoordinator {
             state.branches = branchList
             state.stashes = stashList
             state.tags = tagList
+            state.unpushedCommitCount = unpushedCount
             state.operationState = git.detectOperationState(in: path)
 
             if let index = state.repositories.firstIndex(where: { $0.path == path }) {

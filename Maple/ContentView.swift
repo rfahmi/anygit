@@ -126,7 +126,11 @@ struct DetailAreaView: View {
                 } else {
                     Picker("View", selection: $state.currentTab) {
                         ForEach(AppState.DetailTab.allCases, id: \.self) { tab in
-                            Text(tab.rawValue).tag(tab)
+                            if tab == .history && state.unpushedCommitCount > 0 {
+                                Text("\(tab.rawValue) (\(state.unpushedCommitCount))").tag(tab)
+                            } else {
+                                Text(tab.rawValue).tag(tab)
+                            }
                         }
                     }
                     .pickerStyle(.segmented)

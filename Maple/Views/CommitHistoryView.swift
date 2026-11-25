@@ -48,6 +48,19 @@ struct CommitHistoryView: View {
                 Text("Commit History")
                     .font(.headline)
                 Spacer()
+                if state.unpushedCommitCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("\(state.unpushedCommitCount) unpushed")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15), in: Capsule())
+                }
                 Text("\(commits.count) commits")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -155,6 +168,27 @@ struct CommitRow: View {
         CommitGraphColors.color(forLane: layout.node(atRow: rowIndex)?.lane ?? 0)
     }
 
+    private var mergedBadges: [(label: String, isSynced: Bool)] {
+        let allRefs = commit.refs.isEmpty ? (commit.branch.map { [$0] } ?? []) : commit.refs
+        guard !allRefs.isEmpty else { return [] }
+
+        let refSet = Set(allRefs)
+        var consumedRemotes = Set<String>()
+        var badges: [(label: String, isSynced: Bool)] = []
+
+        for ref in allRefs {
+            if consumedRemotes.contains(ref) { continue }
+            let originRef = "origin/\(ref)"
+            if !ref.contains("/"), refSet.contains(originRef) {
+                consumedRemotes.insert(originRef)
+                badges.append((label: ref, isSynced: true))
+            } else {
+                badges.append((label: ref, isSynced: false))
+            }
+        }
+        return badges
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             CommitGraphRowCanvas(
@@ -166,8 +200,8 @@ struct CommitRow: View {
             .frame(width: graphWidth, height: rowHeight)
 
             HStack(spacing: 6) {
-                if let branch = commit.branch {
-                    BranchTag(name: branch, color: branchColor)
+                ForEach(mergedBadges, id: \.label) { badge in
+                    BranchTag(name: badge.label, isSyncedWithOrigin: badge.isSynced, color: branchColor)
                 }
                 Text(commit.message)
                     .lineLimit(1)
@@ -312,16 +346,24 @@ struct CommitGraphRowCanvas: View {
 
 struct BranchTag: View {
     let name: String
+    var isSyncedWithOrigin: Bool = false
     let color: Color
 
     var body: some View {
-        Text(name)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
-            .foregroundStyle(color)
-            .lineLimit(1)
+        HStack(spacing: 3) {
+            if isSyncedWithOrigin {
+                Image(systemName: "cloud.fill")
+                    .font(.system(size: 8))
+            }
+            Text(name)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+        .foregroundStyle(color)
+        .help(isSyncedWithOrigin ? "Synced with origin/\(name)" : name)
     }
 }
 

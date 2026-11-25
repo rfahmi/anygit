@@ -28,9 +28,19 @@ struct GitCommit: Identifiable, Sendable {
     let author: String
     let date: Date
     let branch: String?
+    let refs: [String]
     let parents: [String]
 
-    nonisolated init(id: String, shortID: String, message: String, author: String, date: Date, branch: String?, parents: [String]) {
+    nonisolated init(
+        id: String,
+        shortID: String,
+        message: String,
+        author: String,
+        date: Date,
+        branch: String?,
+        parents: [String],
+        refs: [String] = []
+    ) {
         self.id = id
         self.shortID = shortID
         self.message = message
@@ -38,6 +48,7 @@ struct GitCommit: Identifiable, Sendable {
         self.date = date
         self.branch = branch
         self.parents = parents
+        self.refs = refs
     }
 }
 

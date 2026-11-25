@@ -364,6 +364,7 @@ actor GitService {
             let refNames = parts.count > 6 ? parts[6] : ""
 
             let branch = Self.parseBranchFromRefs(refNames)
+            let allRefs = Self.parseAllBranchesFromRefs(refNames)
 
             commits.append(GitCommit(
                 id: hash,
@@ -372,7 +373,8 @@ actor GitService {
                 author: author,
                 date: Date(timeIntervalSince1970: timestamp),
                 branch: branch,
-                parents: parents
+                parents: parents,
+                refs: allRefs
             ))
         }
 
@@ -398,6 +400,24 @@ actor GitService {
         }
 
         return nil
+    }
+
+    private static func parseAllBranchesFromRefs(_ refs: String) -> [String] {
+        guard !refs.isEmpty else { return [] }
+        var result: [String] = []
+        for raw in refs.components(separatedBy: ",") {
+            var ref = raw.trimmingCharacters(in: .whitespaces)
+            if ref.hasPrefix("HEAD -> ") {
+                ref = String(ref.dropFirst("HEAD -> ".count)).trimmingCharacters(in: .whitespaces)
+            }
+            if ref.isEmpty || ref == "HEAD" || ref.hasSuffix("/HEAD") || ref.hasPrefix("tag:") {
+                continue
+            }
+            if !result.contains(ref) {
+                result.append(ref)
+            }
+        }
+        return result
     }
 
     // MARK: - Diff
