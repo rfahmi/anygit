@@ -83,12 +83,23 @@ extension GitService {
 
     /// Checks out a remote branch by creating a local tracking branch.
     /// e.g. "origin/feat/foo" → `git checkout -b feat/foo origin/feat/foo`
+    /// If the local branch already exists, checks out that local branch instead.
     func checkoutRemoteBranch(_ remoteBranch: String, in directory: String) async throws {
         // Strip the remote prefix: "origin/feat/foo" → "feat/foo"
         let parts = remoteBranch.split(separator: "/", maxSplits: 1)
         let localName = parts.count > 1 ? String(parts[1]) : remoteBranch
 
-        _ = try await run(["checkout", "-b", localName, remoteBranch], in: directory)
+        do {
+            _ = try await run(["checkout", "-b", localName, remoteBranch], in: directory)
+        } catch {
+            // If `localName` already exists locally, switch to it cleanly.
+            let exists = (try? await run(["show-ref", "--verify", "--quiet", "refs/heads/\(localName)"], in: directory)) != nil
+            if exists {
+                _ = try await run(["checkout", localName], in: directory)
+            } else {
+                throw error
+            }
+        }
     }
 
     // MARK: - Rename Branch

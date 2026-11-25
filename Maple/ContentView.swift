@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var state = AppState()
-    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    @State private var showSidebar = true
     @State private var showNewBranch = false
     @State private var showStashSave = false
     @State private var showMerge = false
@@ -17,22 +17,35 @@ struct ContentView: View {
     @State private var showClone = false
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(state: state, showClone: $showClone)
-                .navigationSplitViewColumnWidth(min: 160, ideal: 220, max: 300)
-        } detail: {
-            if state.selectedRepository != nil {
-                DetailAreaView(
+        HStack(spacing: 0) {
+            if showSidebar {
+                SidebarView(
                     state: state,
-                    showNewBranch: $showNewBranch,
-                    showStashSave: $showStashSave,
-                    showMerge: $showMerge,
-                    showRebase: $showRebase
+                    showClone: $showClone,
+                    onToggleSidebar: { showSidebar.toggle() }
                 )
-            } else {
-                WelcomeView(state: state)
+                .frame(width: 220)
+
+                Divider()
             }
+
+            Group {
+                if state.selectedRepository != nil {
+                    DetailAreaView(
+                        state: state,
+                        showSidebar: $showSidebar,
+                        showNewBranch: $showNewBranch,
+                        showStashSave: $showStashSave,
+                        showMerge: $showMerge,
+                        showRebase: $showRebase
+                    )
+                } else {
+                    WelcomeView(state: state)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea(.container, edges: .top)
         .navigationTitle(state.selectedRepository?.name ?? "AnyGit")
         .frame(minWidth: 520, minHeight: 400)
         .onChange(of: state.selectedFileChange) {
@@ -98,6 +111,7 @@ struct ContentView: View {
 
 struct DetailAreaView: View {
     @Bindable var state: AppState
+    @Binding var showSidebar: Bool
     @Binding var showNewBranch: Bool
     @Binding var showStashSave: Bool
     @Binding var showMerge: Bool
@@ -111,6 +125,7 @@ struct DetailAreaView: View {
                 ToolbarView(
                     state: state,
                     availableWidth: width,
+                    showSidebar: $showSidebar,
                     showNewBranch: $showNewBranch,
                     showStashSave: $showStashSave,
                     showMerge: $showMerge,

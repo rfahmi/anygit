@@ -10,9 +10,75 @@ import SwiftUI
 struct SidebarView: View {
     @Bindable var state: AppState
     @Binding var showClone: Bool
+    var onToggleSidebar: (() -> Void)? = nil
+    @State private var isHoveringAddMenu = false
 
     var body: some View {
-        List(selection: $state.selectedRepository) {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                if let onToggleSidebar {
+                    Button(action: onToggleSidebar) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(HeaderCircleButtonStyle())
+                    .help("Hide Sidebar")
+                }
+
+                Menu {
+                    Button {
+                        openFolderPicker(state: state)
+                    } label: {
+                        Label("Open Repository...", systemImage: "folder")
+                    }
+                    Button {
+                        showClone = true
+                    } label: {
+                        Label("Clone Repository...", systemImage: "square.and.arrow.down")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(isHoveringAddMenu ? .primary : .secondary)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            isHoveringAddMenu ? Color.primary.opacity(0.10) : .clear,
+                            in: Circle()
+                        )
+                        .contentShape(Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .animation(.easeOut(duration: 0.12), value: isHoveringAddMenu)
+                .onHover { isHoveringAddMenu = $0 }
+                .help("Add Repository")
+                .accessibilityLabel("Add Repository")
+                .accessibilityIdentifier("sidebar.addRepository")
+
+                Button(action: {
+                    Task { await state.coordinator.refresh() }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .medium))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(HeaderCircleButtonStyle())
+                .help("Refresh")
+                .accessibilityLabel("Refresh")
+                .accessibilityIdentifier("sidebar.refresh")
+
+                Spacer()
+            }
+            .padding(.leading, 76)
+            .padding(.trailing, 8)
+            .frame(height: 36)
+            .background(.bar)
+
+            Divider()
+
+            List(selection: $state.selectedRepository) {
             Section("Repositories") {
                 ForEach(state.repositories) { repo in
                     SidebarRepoRow(repository: repo)
@@ -55,37 +121,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .toolbar {
-            ToolbarItem {
-                Menu {
-                    Button {
-                        openFolderPicker(state: state)
-                    } label: {
-                        Label("Open Repository...", systemImage: "folder")
-                    }
-                    Button {
-                        showClone = true
-                    } label: {
-                        Label("Clone Repository...", systemImage: "square.and.arrow.down")
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .help("Add Repository")
-                .accessibilityLabel("Add Repository")
-                .accessibilityIdentifier("sidebar.addRepository")
-            }
-
-            ToolbarItem {
-                Button(action: {
-                    Task { await state.coordinator.refresh() }
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Refresh")
-                .accessibilityLabel("Refresh")
-                .accessibilityIdentifier("sidebar.refresh")
-            }
         }
     }
 }
