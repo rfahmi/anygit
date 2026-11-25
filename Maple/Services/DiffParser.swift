@@ -89,12 +89,7 @@ nonisolated enum DiffParser {
                     currentPath = String(raw[range.upperBound...])
                 }
             } else if DiffParser.isPreambleLine(raw) {
-                currentPreamble.append(raw)
-                if raw.hasPrefix("rename to ") {
-                    currentPath = String(raw.dropFirst("rename to ".count))
-                } else if raw.hasPrefix("--- a/"), currentPath == nil {
-                    currentPath = String(raw.dropFirst("--- a/".count))
-                }
+                consumePreamble(raw)
             } else if raw.hasPrefix("+++ ") {
                 currentPreamble.append(raw)
                 capturePath(from: raw)
@@ -113,6 +108,15 @@ nonisolated enum DiffParser {
                 hunkLines.append(DiffLine(content: String(raw.dropFirst()), type: .context, oldLineNumber: oldLine, newLineNumber: newLine))
                 oldLine += 1
                 newLine += 1
+            }
+        }
+
+        private mutating func consumePreamble(_ raw: String) {
+            currentPreamble.append(raw)
+            if raw.hasPrefix("rename to ") {
+                currentPath = String(raw.dropFirst("rename to ".count))
+            } else if raw.hasPrefix("--- a/"), currentPath == nil {
+                currentPath = String(raw.dropFirst("--- a/".count))
             }
         }
 

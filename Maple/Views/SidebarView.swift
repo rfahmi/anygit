@@ -10,7 +10,7 @@ import SwiftUI
 struct SidebarView: View {
     @Bindable var state: AppState
     @Binding var showClone: Bool
-    var onToggleSidebar: (() -> Void)? = nil
+    var onToggleSidebar: (() -> Void)?
     @State private var isHoveringAddMenu = false
 
     var body: some View {

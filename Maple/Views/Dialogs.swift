@@ -91,7 +91,7 @@ struct CloneDialog: View {
 
 struct NewBranchDialog: View {
     @Bindable var state: AppState
-    var startPoint: GitCommit? = nil
+    var startPoint: GitCommit?
     @Environment(\.dismiss) private var dismiss
     @State private var branchName = ""
     @State private var checkoutAfterCreate = true

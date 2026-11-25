@@ -120,4 +120,161 @@ extension GitService {
         }
         return trimmed.isEmpty ? "repository" : trimmed
     }
+
+    // MARK: - Commit Details & Diffs
+
+    func diffFilesForCommit(_ commitHash: String, in directory: String) async throws -> [DiffFile] {
+        let output = try await run(
+            ["show", "--no-color", "--format=", commitHash],
+            in: directory
+        )
+        return Self.parseDiffFiles(output)
+    }
+
+    func stagedDiffForCommitMessage(in directory: String, maxDiffChars: Int = 6000) async throws -> String {
+        let stat = try await run(["diff", "--cached", "--stat"], in: directory)
+        let diff = try await run(["diff", "--cached", "--no-color", "--unified=2"], in: directory)
+        let trimmedDiff = diff.count > maxDiffChars
+            ? String(diff.prefix(maxDiffChars)) + "\n... (diff truncated)"
+            : diff
+        return "Files changed:\n\(stat)\nDiff:\n\(trimmedDiff)"
+    }
+
+    func commitDetails(for commitHash: String, in directory: String) async throws -> GitCommitDetails {
+        let separator = "<MAPLE_SEP>"
+        let format = ["%H", "%h", "%an", "%ae", "%ad", "%cn", "%ce", "%cd", "%P", "%D", "%B"].joined(separator: separator)
+        let metaOutput = try await run(
+            ["show", "--no-patch", "--date=format:%Y-%m-%d %H:%M:%S %z", "--format=\(format)", commitHash],
+            in: directory
+        )
+        let statOutput = (try? await run(
+            ["show", "--no-patch", "--stat", "--format=", commitHash],
+            in: directory
+        )) ?? ""
+
+        let parts = metaOutput.components(separatedBy: separator)
+        func field(_ index: Int, fallback: String = "") -> String {
+            index < parts.count ? parts[index] : fallback
+        }
+
+        let fullMessage = (parts.count > 10 ? parts[10...].joined(separator: separator) : "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return GitCommitDetails(
+            sha: field(0, fallback: commitHash),
+            shortSHA: field(1, fallback: String(commitHash.prefix(7))),
+            authorName: field(2),
+            authorEmail: field(3),
+            authorDate: field(4),
+            committerName: field(5),
+            committerEmail: field(6),
+            committerDate: field(7),
+            parents: field(8).components(separatedBy: " ").filter { !$0.isEmpty },
+            refs: Self.parseAllBranchesFromRefs(field(9)),
+            fullMessage: fullMessage,
+            statSummary: statOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    // MARK: - Apply patch (for interactive staging)
+
+    /// Pipes a patch to `git apply`, optionally with `--cached` (to stage into
+    /// the index) and/or `--reverse` (to unstage from the index).
+    func applyPatch(_ patch: String, cached: Bool = false, reverse: Bool = false, in directory: String) async throws {
+        var args = ["apply", "--whitespace=nowarn"]
+        if cached { args.append("--cached") }
+        if reverse { args.append("--reverse") }
+        args.append("-")
+        _ = try await run(args, in: directory, stdin: patch)
+    }
+
+    // MARK: - Blame
+
+    func blame(for filePath: String, in directory: String) async throws -> [BlameLine] {
+        let output = try await run(["blame", "--porcelain", "--", filePath], in: directory)
+        return Self.parseBlame(output)
+    }
+
+    static func parseBlame(_ output: String) -> [BlameLine] {
+        struct CommitMeta {
+            var author: String = ""
+            var date: Date = Date()
+            var summary: String = ""
+        }
+
+        var lines: [BlameLine] = []
+        var metaCache: [String: CommitMeta] = [:]
+
+        var currentHash = ""
+        var currentFinalLine = 0
+        var currentMeta = CommitMeta()
+
+        for raw in output.components(separatedBy: "\n") {
+            if raw.hasPrefix("\t") {
+                let content = String(raw.dropFirst())
+                lines.append(BlameLine(
+                    lineNumber: currentFinalLine,
+                    content: content,
+                    commitHash: currentHash,
+                    shortHash: String(currentHash.prefix(7)),
+                    author: currentMeta.author,
+                    date: currentMeta.date,
+                    summary: currentMeta.summary
+                ))
+                continue
+            }
+
+            let parts = raw.components(separatedBy: " ")
+            // Blame porcelain commit header: "<40-char hash> <origLine> <finalLine> [<numLines>]"
+            if parts.count >= 3, parts[0].count == 40, Int(parts[2]) != nil {
+                currentHash = parts[0]
+                currentFinalLine = Int(parts[2]) ?? 0
+                currentMeta = metaCache[currentHash] ?? CommitMeta()
+            } else if raw.hasPrefix("author ") {
+                currentMeta.author = String(raw.dropFirst("author ".count))
+                metaCache[currentHash] = currentMeta
+            } else if raw.hasPrefix("author-time ") {
+                let ts = String(raw.dropFirst("author-time ".count))
+                currentMeta.date = Date(timeIntervalSince1970: TimeInterval(ts) ?? 0)
+                metaCache[currentHash] = currentMeta
+            } else if raw.hasPrefix("summary ") {
+                currentMeta.summary = String(raw.dropFirst("summary ".count))
+                metaCache[currentHash] = currentMeta
+            }
+        }
+
+        return lines
+    }
+
+    func diffForCommit(_ commitHash: String, in directory: String) async throws -> [DiffLine] {
+        let output = try await run(
+            ["show", "--no-color", "--format=", commitHash],
+            in: directory
+        )
+        return Self.parseDiff(output)
+    }
+
+    /// `git diff` skips untracked files, so we synthesize an all-additions diff
+    /// by reading the file directly.
+    func diffForUntrackedFile(_ filePath: String, in directory: String) async throws -> [DiffLine] {
+        let fullPath = (directory as NSString).appendingPathComponent(filePath)
+        guard let data = FileManager.default.contents(atPath: fullPath),
+              let content = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        var lines: [DiffLine] = []
+        lines.append(DiffLine(content: "new file: \(filePath)", type: .header, oldLineNumber: nil, newLineNumber: nil))
+
+        for (index, line) in content.components(separatedBy: "\n").enumerated() {
+            lines.append(DiffLine(
+                content: line,
+                type: .addition,
+                oldLineNumber: nil,
+                newLineNumber: index + 1
+            ))
+        }
+
+        return lines
+    }
 }
