@@ -94,34 +94,6 @@ struct SidebarView: View {
                         .font(.caption)
                 }
             }
-
-            if !state.branches.isEmpty {
-                Section("Branches") {
-                    ForEach(state.branches.filter { !$0.isRemote }) { branch in
-                        Label {
-                            Text(branch.name)
-                                .fontWeight(branch.isCurrent ? .semibold : .regular)
-                                .lineLimit(1)
-                        } icon: {
-                            Image(systemName: branch.isCurrent ? "arrow.triangle.branch" : "line.diagonal")
-                                .foregroundStyle(branch.isCurrent ? .green : .secondary)
-                        }
-                    }
-                }
-
-                Section("Remotes") {
-                    ForEach(state.branches.filter { $0.isRemote }) { branch in
-                        Label {
-                            Text(branch.name)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        } icon: {
-                            Image(systemName: "cloud")
-                                .foregroundStyle(.blue)
-                        }
-                    }
-                }
-            }
         }
         .listStyle(.sidebar)
         }
