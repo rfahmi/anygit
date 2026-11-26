@@ -15,6 +15,8 @@ struct ContentView: View {
     @State private var showMerge = false
     @State private var showRebase = false
     @State private var showClone = false
+    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 220
+    @State private var dragStartSidebarWidth: Double?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -24,9 +26,19 @@ struct ContentView: View {
                     showClone: $showClone,
                     onToggleSidebar: { showSidebar.toggle() }
                 )
-                .frame(width: 220)
+                .frame(width: sidebarWidth)
 
-                Divider()
+                SplitDivider(
+                    axis: .horizontal,
+                    onDragChanged: { delta in
+                        let base = dragStartSidebarWidth ?? sidebarWidth
+                        if dragStartSidebarWidth == nil { dragStartSidebarWidth = base }
+                        sidebarWidth = min(max(base + delta, 170), 420)
+                    },
+                    onDragEnded: {
+                        dragStartSidebarWidth = nil
+                    }
+                )
             }
 
             Group {

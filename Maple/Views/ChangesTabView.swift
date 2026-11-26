@@ -92,6 +92,9 @@ struct ChangesTabView: View {
     @Bindable var state: AppState
     let availableWidth: CGFloat
     @AppStorage("changesLayout") private var layout: SplitLayout = .horizontal
+    @AppStorage("changesSidebarWidth") private var sidebarWidth: Double = 280
+    @AppStorage("changesTopRatio") private var topRatio: Double = 0.45
+    @State private var dragStartSize: Double?
 
     private var blameAvailable: Bool {
         guard let file = state.selectedFileChange else { return false }
@@ -104,18 +107,41 @@ struct ChangesTabView: View {
 
     var body: some View {
         if layout == .vertical {
-            VStack(spacing: 0) {
-                StagingAreaView(state: state)
-                    .frame(maxHeight: .infinity)
-                Divider()
-                fileContentPanel
-                    .frame(maxHeight: .infinity)
+            GeometryReader { geometry in
+                let totalHeight = max(geometry.size.height, 1)
+                let topHeight = min(max(totalHeight * topRatio, 120), max(120, totalHeight - 140))
+
+                VStack(spacing: 0) {
+                    StagingAreaView(state: state)
+                        .frame(height: topHeight)
+                    SplitDivider(
+                        axis: .vertical,
+                        onDragChanged: { delta in
+                            let base = dragStartSize ?? Double(topHeight)
+                            if dragStartSize == nil { dragStartSize = base }
+                            let nextHeight = min(max(base + delta, 120), max(120, totalHeight - 140))
+                            topRatio = nextHeight / totalHeight
+                        },
+                        onDragEnded: { dragStartSize = nil }
+                    )
+                    fileContentPanel
+                        .frame(maxHeight: .infinity)
+                }
             }
         } else {
+            let clampedWidth = min(max(sidebarWidth, 180), max(220, availableWidth - 240))
             HStack(spacing: 0) {
                 StagingAreaView(state: state)
-                    .frame(width: min(max(availableWidth * 0.35, 220), 400))
-                Divider()
+                    .frame(width: clampedWidth)
+                SplitDivider(
+                    axis: .horizontal,
+                    onDragChanged: { delta in
+                        let base = dragStartSize ?? clampedWidth
+                        if dragStartSize == nil { dragStartSize = base }
+                        sidebarWidth = min(max(base + delta, 180), max(220, availableWidth - 240))
+                    },
+                    onDragEnded: { dragStartSize = nil }
+                )
                 fileContentPanel
                     .frame(maxWidth: .infinity)
             }

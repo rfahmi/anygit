@@ -30,6 +30,9 @@ struct HistoryTabView: View {
     @Bindable var state: AppState
     let availableWidth: CGFloat
     @AppStorage("historyLayout") private var layout: SplitLayout = .vertical
+    @AppStorage("historyHorizontalRatio") private var horizontalRatio: Double = 0.55
+    @AppStorage("historyVerticalRatio") private var verticalRatio: Double = 0.55
+    @State private var dragStartRatio: Double?
 
     private var hasSelection: Bool {
         state.selectedCommit != nil && !state.commitDiffFiles.isEmpty
@@ -38,7 +41,9 @@ struct HistoryTabView: View {
     var body: some View {
         GeometryReader { geometry in
             if layout == .horizontal {
-                let historyWidth = hasSelection ? geometry.size.width * 0.55 : geometry.size.width
+                let totalWidth = max(geometry.size.width, 1)
+                let historyWidth = hasSelection ? totalWidth * horizontalRatio : totalWidth
+                let diffWidth = max(0, totalWidth - historyWidth - 7)
 
                 HStack(spacing: 0) {
                     CommitHistoryView(state: state, availableWidth: historyWidth, layout: $layout)
@@ -46,30 +51,50 @@ struct HistoryTabView: View {
                         .clipped()
 
                     if hasSelection {
-                        Divider()
+                        SplitDivider(
+                            axis: .horizontal,
+                            onDragChanged: { delta in
+                                let base = dragStartRatio ?? horizontalRatio
+                                if dragStartRatio == nil { dragStartRatio = base }
+                                horizontalRatio = min(max(base + delta / totalWidth, 0.25), 0.75)
+                            },
+                            onDragEnded: { dragStartRatio = nil }
+                        )
 
                         CommitDiffView(
                             commit: state.selectedCommit,
                             files: state.commitDiffFiles
                         )
-                        .frame(width: max(0, geometry.size.width * 0.45 - 1))
+                        .frame(width: diffWidth)
                         .clipped()
                     }
                 }
             } else {
+                let totalHeight = max(geometry.size.height, 1)
+                let historyHeight = hasSelection ? totalHeight * verticalRatio : totalHeight
+                let diffHeight = max(0, totalHeight - historyHeight - 7)
+
                 VStack(spacing: 0) {
                     CommitHistoryView(state: state, availableWidth: availableWidth, layout: $layout)
-                        .frame(height: hasSelection ? max(0, geometry.size.height * 0.55) : geometry.size.height)
+                        .frame(height: max(0, historyHeight))
                         .clipped()
 
                     if hasSelection {
-                        Divider()
+                        SplitDivider(
+                            axis: .vertical,
+                            onDragChanged: { delta in
+                                let base = dragStartRatio ?? verticalRatio
+                                if dragStartRatio == nil { dragStartRatio = base }
+                                verticalRatio = min(max(base + delta / totalHeight, 0.25), 0.75)
+                            },
+                            onDragEnded: { dragStartRatio = nil }
+                        )
 
                         CommitDiffView(
                             commit: state.selectedCommit,
                             files: state.commitDiffFiles
                         )
-                        .frame(height: max(0, geometry.size.height * 0.45 - 1))
+                        .frame(height: diffHeight)
                         .clipped()
                     }
                 }
