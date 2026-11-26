@@ -93,109 +93,118 @@ struct ToolbarView: View {
             }
 
             HStack(spacing: isCompact ? 2 : 4) {
-                if isNarrow {
-                    ToolbarIconButton(icon: "arrow.down.circle", color: .blue, help: "Pull") {
-                        Task { await state.coordinator.performPull() }
-                    }
-                    ToolbarIconButton(icon: "arrow.up.circle", color: .green, help: "Push") {
-                        Task { await state.coordinator.performPush() }
-                    }
-                } else if isCompact {
-                    ToolbarIconButton(icon: "arrow.down.circle", color: .blue, help: "Pull") {
-                        Task { await state.coordinator.performPull() }
-                    }
-                    ToolbarIconButton(icon: "arrow.up.circle", color: .green, help: "Push") {
-                        Task { await state.coordinator.performPush() }
-                    }
-                    ToolbarIconButton(icon: "arrow.down.doc", color: .cyan, help: "Fetch") {
-                        Task { await state.coordinator.performFetch() }
-                    }
-                    ToolbarIconButton(icon: "arrow.uturn.backward.circle", color: .orange, help: "Stash") {
-                        showStashSave = true
-                    }
-
-                    Divider()
-                        .frame(height: 18)
-                        .padding(.horizontal, 2)
-
-                    ToolbarIconButton(icon: "plus.circle", color: .teal, help: "Branch") {
-                        showNewBranch = true
-                    }
-                    ToolbarIconButton(icon: "arrow.triangle.merge", color: .purple, help: "Merge") {
-                        showMerge = true
-                    }
-                    ToolbarIconButton(icon: "arrow.triangle.branch", color: .orange, help: "Rebase") {
-                        showRebase = true
-                    }
-                } else {
-                    ToolbarActionButton(icon: "arrow.down.circle", label: "Pull", color: .blue) {
-                        Task { await state.coordinator.performPull() }
-                    }
-                    ToolbarActionButton(icon: "arrow.up.circle", label: "Push", color: .green) {
-                        Task { await state.coordinator.performPush() }
-                    }
-                    ToolbarActionButton(icon: "arrow.down.doc", label: "Fetch", color: .cyan) {
-                        Task { await state.coordinator.performFetch() }
-                    }
-                    ToolbarActionButton(icon: "arrow.uturn.backward.circle", label: "Stash", color: .orange) {
-                        showStashSave = true
-                    }
-
-                    Divider()
-                        .frame(height: 20)
-                        .padding(.horizontal, 2)
-
-                    ToolbarActionButton(icon: "plus.circle", label: "Branch", color: .teal) {
-                        showNewBranch = true
-                    }
-                    ToolbarActionButton(icon: "arrow.triangle.merge", label: "Merge", color: .purple) {
-                        showMerge = true
-                    }
-                    ToolbarActionButton(icon: "arrow.triangle.branch", label: "Rebase", color: .orange) {
-                        showRebase = true
-                    }
-                }
+                actionButtons
             }
             .disabled(state.operationInProgress)
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 8) {
-                if state.operationInProgress {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                if let msg = state.successMessage {
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                        .lineLimit(1)
-                        .task {
-                            try? await Task.sleep(for: .seconds(3))
-                            state.successMessage = nil
-                        }
-                }
-
-                if !isNarrow {
-                    HStack(spacing: 4) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        TextField("Search...", text: $state.searchText)
-                            .textFieldStyle(.plain)
-                            .frame(width: isCompact ? 100 : 150)
-                            .accessibilityIdentifier("toolbar.search")
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                }
-            }
+            trailingControls
         }
         .padding(.horizontal, 14)
         .frame(height: 36)
         .background(.bar)
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        if isNarrow {
+            ToolbarIconButton(icon: "arrow.down.circle", color: .blue, help: "Pull") {
+                Task { await state.coordinator.performPull() }
+            }
+            ToolbarIconButton(icon: "arrow.up.circle", color: .green, help: "Push") {
+                Task { await state.coordinator.performPush() }
+            }
+        } else if isCompact {
+            ToolbarIconButton(icon: "arrow.down.circle", color: .blue, help: "Pull") {
+                Task { await state.coordinator.performPull() }
+            }
+            ToolbarIconButton(icon: "arrow.up.circle", color: .green, help: "Push") {
+                Task { await state.coordinator.performPush() }
+            }
+            ToolbarIconButton(icon: "arrow.down.doc", color: .cyan, help: "Fetch") {
+                Task { await state.coordinator.performFetch() }
+            }
+            ToolbarIconButton(icon: "arrow.uturn.backward.circle", color: .orange, help: "Stash") {
+                showStashSave = true
+            }
+
+            Divider()
+                .frame(height: 18)
+                .padding(.horizontal, 2)
+
+            ToolbarIconButton(icon: "plus.circle", color: .teal, help: "Branch") {
+                showNewBranch = true
+            }
+            ToolbarIconButton(icon: "arrow.triangle.merge", color: .purple, help: "Merge") {
+                showMerge = true
+            }
+            ToolbarIconButton(icon: "arrow.triangle.branch", color: .orange, help: "Rebase") {
+                showRebase = true
+            }
+        } else {
+            ToolbarActionButton(icon: "arrow.down.circle", label: "Pull", color: .blue) {
+                Task { await state.coordinator.performPull() }
+            }
+            ToolbarActionButton(icon: "arrow.up.circle", label: "Push", color: .green) {
+                Task { await state.coordinator.performPush() }
+            }
+            ToolbarActionButton(icon: "arrow.down.doc", label: "Fetch", color: .cyan) {
+                Task { await state.coordinator.performFetch() }
+            }
+            ToolbarActionButton(icon: "arrow.uturn.backward.circle", label: "Stash", color: .orange) {
+                showStashSave = true
+            }
+
+            Divider()
+                .frame(height: 20)
+                .padding(.horizontal, 2)
+
+            ToolbarActionButton(icon: "plus.circle", label: "Branch", color: .teal) {
+                showNewBranch = true
+            }
+            ToolbarActionButton(icon: "arrow.triangle.merge", label: "Merge", color: .purple) {
+                showMerge = true
+            }
+            ToolbarActionButton(icon: "arrow.triangle.branch", label: "Rebase", color: .orange) {
+                showRebase = true
+            }
+        }
+    }
+
+    private var trailingControls: some View {
+        HStack(spacing: 8) {
+            if state.operationInProgress {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            if let msg = state.successMessage {
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                    .task {
+                        try? await Task.sleep(for: .seconds(3))
+                        state.successMessage = nil
+                    }
+            }
+
+            if !isNarrow {
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("Search...", text: $state.searchText)
+                        .textFieldStyle(.plain)
+                        .frame(width: isCompact ? 100 : 150)
+                        .accessibilityIdentifier("toolbar.search")
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
     }
 }
 
@@ -261,6 +270,7 @@ struct HeaderCircleButtonStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.12), value: isHovering)
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
             .onHover { isHovering = $0 }
+            .focusEffectDisabled()
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
@@ -289,6 +299,7 @@ struct ToolbarTileButtonStyle: ButtonStyle {
             .onHover { hovering in
                 isHovering = hovering
             }
+            .focusEffectDisabled()
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
@@ -306,17 +317,17 @@ private struct BranchSwitcherPopover: View {
     @State private var query = ""
 
     private var filteredLocal: [GitBranch] {
-        let local = state.branches.filter { !$0.isRemote }
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return local }
-        return local.filter { $0.name.localizedStandardContains(q) }
+        filterBranches(state.branches.filter { !$0.isRemote })
     }
 
     private var filteredRemote: [GitBranch] {
-        let remote = state.branches.filter { $0.isRemote && !$0.name.hasSuffix("/HEAD") }
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return remote }
-        return remote.filter { $0.name.localizedStandardContains(q) }
+        filterBranches(state.branches.filter { $0.isRemote && !$0.name.hasSuffix("/HEAD") })
+    }
+
+    private func filterBranches(_ branches: [GitBranch]) -> [GitBranch] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return branches }
+        return branches.filter { $0.name.localizedStandardContains(trimmed) }
     }
 
     var body: some View {

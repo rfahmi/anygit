@@ -53,6 +53,7 @@ struct SidebarView: View {
                 .fixedSize()
                 .animation(.easeOut(duration: 0.12), value: isHoveringAddMenu)
                 .onHover { isHoveringAddMenu = $0 }
+                .focusEffectDisabled()
                 .help("Add Repository")
                 .accessibilityLabel("Add Repository")
                 .accessibilityIdentifier("sidebar.addRepository")
