@@ -9,9 +9,14 @@ import SwiftUI
 
 private struct HunkStagingToolbar: View {
     @Bindable var state: AppState
+    @State private var showDiscardConfirm = false
 
     private var isStagedView: Bool {
         state.selectedFileChange?.isStaged ?? false
+    }
+
+    private var canDiscardLines: Bool {
+        !isStagedView && state.selectedFileChange?.status != .untracked
     }
 
     private var selectedLineCount: Int {
@@ -61,6 +66,15 @@ private struct HunkStagingToolbar: View {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(!hasSelection || state.operationInProgress)
             } else {
+                if canDiscardLines {
+                    Button {
+                        showDiscardConfirm = true
+                    } label: {
+                        Label("Discard selected", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(!hasSelection || state.operationInProgress)
+                }
+
                 Button {
                     Task { await state.coordinator.stageSelectedLines() }
                 } label: {
@@ -73,6 +87,14 @@ private struct HunkStagingToolbar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
+        .alert("Discard Selected Lines?", isPresented: $showDiscardConfirm) {
+            Button("Discard", role: .destructive) {
+                Task { await state.coordinator.discardSelectedLines() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently reverts \(selectedLineCount) selected line(s) in the working tree. It cannot be undone.")
+        }
     }
 
     private static func allLines(in file: DiffFile?) -> [Int: Set<Int>] {

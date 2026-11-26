@@ -414,7 +414,7 @@ final class GitCoordinator {
         await reconcileSelectedFileDiff()
     }
 
-    private func reconcileSelectedFileDiff() async {
+    func reconcileSelectedFileDiff() async {
         guard let selected = state.selectedFileChange else { return }
         if state.fileChanges.contains(selected) {
             await loadFileDiff()

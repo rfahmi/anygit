@@ -18,6 +18,8 @@ struct StagingAreaView: View {
     @State private var dragStartRatio: Double?
     @State private var isUnstagedCollapsed: Bool = false
     @State private var isStagedCollapsed: Bool = false
+    @State private var pendingDiscardFile: GitFileChange?
+    @State private var showDiscardAllConfirm: Bool = false
 
     private var stagedFiles: [GitFileChange] {
         state.filteredFileChanges.filter { $0.isStaged }
@@ -61,7 +63,9 @@ struct StagingAreaView: View {
                             actionColor: .green,
                             onAction: { file in Task { await state.coordinator.stageFile(file) } },
                             bulkActionLabel: "Stage All",
-                            onBulkAction: { Task { await state.coordinator.stageAllFiles() } }
+                            onBulkAction: { Task { await state.coordinator.stageAllFiles() } },
+                            onDiscard: { file in pendingDiscardFile = file },
+                            onBulkDiscard: { showDiscardAllConfirm = true }
                         )
                         .frame(height: bothExpanded ? unstagedHeight : nil)
                         .frame(maxHeight: (!isUnstagedCollapsed && isStagedCollapsed) ? .infinity : nil)
@@ -191,6 +195,33 @@ struct StagingAreaView: View {
                 .padding(10)
             }
         }
+        .alert(
+            "Discard Changes?",
+            isPresented: Binding(
+                get: { pendingDiscardFile != nil },
+                set: { if !$0 { pendingDiscardFile = nil } }
+            ),
+            presenting: pendingDiscardFile
+        ) { file in
+            Button("Discard", role: .destructive) {
+                Task { await state.coordinator.discardFile(file) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { file in
+            if file.status == .untracked {
+                Text("This permanently deletes the untracked file \"\(file.path)\". It cannot be undone.")
+            } else {
+                Text("This permanently discards unstaged changes in \"\(file.path)\". It cannot be undone.")
+            }
+        }
+        .alert("Discard All Unstaged Changes?", isPresented: $showDiscardAllConfirm) {
+            Button("Discard All", role: .destructive) {
+                Task { await state.coordinator.discardAllFiles() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently discards all unstaged modifications and deletes untracked files. It cannot be undone.")
+        }
     }
 }
 
@@ -207,6 +238,8 @@ struct FileChangeSection: View {
     let onAction: (GitFileChange) -> Void
     let bulkActionLabel: String
     let onBulkAction: () -> Void
+    var onDiscard: ((GitFileChange) -> Void)?
+    var onBulkDiscard: (() -> Void)?
 
     // Only show selection if this section is active
     private var sectionSelection: Binding<GitFileChange?> {
@@ -252,12 +285,23 @@ struct FileChangeSection: View {
                 Spacer()
 
                 if !files.isEmpty {
-                    Button(bulkActionLabel) {
-                        onBulkAction()
+                    HStack(spacing: 10) {
+                        if let onBulkDiscard {
+                            Button("Discard All") {
+                                onBulkDiscard()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Button(bulkActionLabel) {
+                            onBulkAction()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(.blue)
                 }
             }
             .padding(.horizontal, 10)
@@ -266,9 +310,13 @@ struct FileChangeSection: View {
             if !isCollapsed {
                 List(selection: sectionSelection) {
                     ForEach(files) { file in
-                        FileChangeRow(file: file, actionIcon: actionIcon, actionColor: actionColor) {
-                            onAction(file)
-                        }
+                        FileChangeRow(
+                            file: file,
+                            actionIcon: actionIcon,
+                            actionColor: actionColor,
+                            onAction: { onAction(file) },
+                            onDiscard: onDiscard.map { discard in { discard(file) } }
+                        )
                         .tag(file)
                         .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
                     }
@@ -324,6 +372,8 @@ struct FileChangeRow: View {
     let actionIcon: String
     let actionColor: Color
     let onAction: () -> Void
+    var onDiscard: (() -> Void)?
+    @State private var isHovering = false
 
     private var statusColor: Color {
         switch file.status {
@@ -350,6 +400,17 @@ struct FileChangeRow: View {
 
             Spacer(minLength: 4)
 
+            if isHovering, let onDiscard {
+                Button(action: onDiscard) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Discard Changes")
+                .accessibilityLabel("Discard \(file.path)")
+            }
+
             Button(action: onAction) {
                 Image(systemName: actionIcon)
                     .foregroundStyle(actionColor)
@@ -359,6 +420,14 @@ struct FileChangeRow: View {
             .accessibilityIdentifier(file.isStaged ? "staging.unstage" : "staging.stage")
         }
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .contextMenu {
+            Button(file.isStaged ? "Unstage" : "Stage", action: onAction)
+            if let onDiscard {
+                Divider()
+                Button("Discard Changes…", role: .destructive, action: onDiscard)
+            }
+        }
     }
 }
 

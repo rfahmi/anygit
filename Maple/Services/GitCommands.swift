@@ -277,4 +277,23 @@ extension GitService {
 
         return lines
     }
+
+    // MARK: - Discard changes
+
+    /// Discards unstaged working-tree changes for a single file. Untracked
+    /// files are removed with `git clean`; tracked files are restored from the
+    /// index with `git checkout --`.
+    func discard(file: String, status: GitFileChange.FileStatus, in directory: String) async throws {
+        if status == .untracked {
+            _ = try await run(["clean", "-fd", "--", file], in: directory)
+        } else {
+            _ = try await run(["checkout", "--", file], in: directory)
+        }
+    }
+
+    /// Discards all unstaged working-tree changes and removes untracked files.
+    func discardAll(in directory: String) async throws {
+        _ = try await run(["checkout", "--", "."], in: directory)
+        _ = try await run(["clean", "-fd"], in: directory)
+    }
 }

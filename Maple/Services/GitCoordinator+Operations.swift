@@ -262,4 +262,38 @@ extension GitCoordinator {
         state.errorMessage = nil
         state.successMessage = nil
     }
+
+    // MARK: - Discard changes
+
+    func discardFile(_ file: GitFileChange) async {
+        guard !file.isStaged else { return }
+        await runLightOperation { path in
+            try await git.discard(file: file.path, status: file.status, in: path)
+        }
+        await reconcileSelectedFileDiff()
+    }
+
+    func discardAllFiles() async {
+        await runLightOperation { path in
+            try await git.discardAll(in: path)
+        }
+        await reconcileSelectedFileDiff()
+    }
+
+    /// Discards the selected `+` / `-` lines of the currently viewed unstaged
+    /// file by applying the reverse patch directly to the working tree.
+    func discardSelectedLines() async {
+        guard let selected = state.selectedFileChange,
+              !selected.isStaged,
+              selected.status != .untracked,
+              let file = state.currentDiffFile,
+              !state.selectedLines.isEmpty else { return }
+        let patch = file.patchText(forLines: state.selectedLines, reverse: true)
+        guard !patch.isEmpty else { return }
+
+        await runLightOperation { path in
+            try await git.applyPatch(patch, cached: false, reverse: true, in: path)
+        }
+        await reconcileSelectedFileDiff()
+    }
 }
