@@ -82,8 +82,10 @@ struct SidebarView: View {
             List(selection: $state.selectedRepository) {
             Section("Repositories") {
                 ForEach(state.repositories) { repo in
-                    SidebarRepoRow(repository: repo)
-                        .tag(repo)
+                    SidebarRepoRow(repository: repo) {
+                        state.coordinator.removeRepository(repo)
+                    }
+                    .tag(repo)
                 }
 
                 if state.repositories.isEmpty {
@@ -128,6 +130,8 @@ struct SidebarView: View {
 
 struct SidebarRepoRow: View {
     let repository: GitRepository
+    var onRemove: (() -> Void)?
+    @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -153,6 +157,20 @@ struct SidebarRepoRow: View {
 
             Spacer(minLength: 4)
 
+            if isHovering, let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .help("Remove Repository")
+                .accessibilityLabel("Remove \(repository.name)")
+            }
+
             Menu {
                 OpenInMenuItems(repositoryPath: repository.path)
             } label: {
@@ -168,9 +186,14 @@ struct SidebarRepoRow: View {
             .accessibilityLabel("Open \(repository.name) in IDE")
         }
         .padding(.vertical, 2)
+        .onHover { isHovering = $0 }
         .contextMenu {
             Menu("Open in") {
                 OpenInMenuItems(repositoryPath: repository.path)
+            }
+            if let onRemove {
+                Divider()
+                Button("Remove Repository", role: .destructive, action: onRemove)
             }
         }
     }

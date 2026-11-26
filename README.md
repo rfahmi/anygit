@@ -4,17 +4,17 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-6-orange)](https://swift.org)
-[![License: MIT](https://img.shields.io/github/license/rfahmi/maple-git)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/rfahmi/anygit)](LICENSE)
 
-A **free, fast, native** macOS Git client built with SwiftUI. Forked from Maple and evolved for daily personal & open-source workflows.
+A **free, fast, native** macOS Git client built with SwiftUI. Forked from [Maple](https://github.com/poolcamacho/Maple) and evolved for daily personal & open-source workflows.
 
-![Maple History tab with commit graph and diff](docs/screenshots/commit-graph.png)
+![AnyGit History tab with commit graph and diff](docs/screenshots/commit-graph.png)
 
 </div>
 
-## Why Maple
+## Why AnyGit
 
-Most Git GUIs on macOS are Electron based, locked behind a subscription, or oversimplified to the point of hiding what Git actually does. Maple is none of those. It shells out to the `git` binary you already have, shows the full topology of your history, and stays out of the way when you know what you are doing.
+Most Git GUIs on macOS are Electron based, locked behind a subscription, or oversimplified to the point of hiding what Git actually does. AnyGit is none of those. It shells out to the `git` binary you already have, shows the full topology of your history, and stays out of the way when you know what you are doing.
 
 ## Features
 
@@ -40,36 +40,28 @@ Most Git GUIs on macOS are Electron based, locked behind a subscription, or over
 
 ## Install
 
-1. Grab the latest signed `.dmg` from [Releases](https://github.com/poolcamacho/Maple/releases/latest).
-2. Open the disk image and drag `Maple.app` into `Applications`.
-3. Launch from Launchpad.
-
-The `.dmg` is signed with a Developer ID Application certificate and notarized by Apple, so macOS Gatekeeper will open it without quarantine workarounds.
-
-A Homebrew Cask is planned - once live:
-
-```bash
-brew install --cask maple
-```
+Grab the latest release from [Releases](https://github.com/rfahmi/anygit/releases/latest) (if available), or build from source below and drag `AnyGit.app` into `Applications`.
 
 ## Requirements
 
-- macOS 14.0+ (Apple Silicon recommended, Intel supported)
+- macOS 26+ (Apple Silicon recommended, Intel supported)
 - Git installed (ships with Xcode Command Line Tools)
 
 ## Building from source
 
-If you prefer to build yourself instead of downloading the release:
-
-- Xcode 26+ (Swift 6.3 toolchain)
+- Xcode 26+ (Swift 6 toolchain)
 
 ```bash
-git clone https://github.com/poolcamacho/Maple.git
-cd Maple
+git clone https://github.com/rfahmi/anygit.git
+cd anygit
 open Maple.xcodeproj
 ```
 
-Build and run from Xcode with `Cmd+R`.
+Build and run from Xcode with `Cmd+R`, or build a Release binary via CLI:
+
+```bash
+xcodebuild build -scheme Maple -configuration Release -destination 'platform=macOS'
+```
 
 ## Architecture
 
@@ -123,10 +115,6 @@ Utils/      FolderPicker, DateExtensions
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Security issues go through the private flow in [SECURITY.md](SECURITY.md).
 
-## Sponsor
+## Credits & License
 
-Maple is developed on nights and weekends. If it saves you time, consider [sponsoring on GitHub](https://github.com/sponsors/poolcamacho) so it stays free and actively maintained.
-
-## License
-
-[MIT](LICENSE)
+AnyGit is forked from [Maple](https://github.com/poolcamacho/Maple) by **Pool Camacho**, licensed under the [MIT License](LICENSE).

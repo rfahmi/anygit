@@ -11,7 +11,7 @@ import SwiftUI
 final class GitCoordinator {
     let state: AppState
     var git: GitService { state.git }
-    private let recentRepos = RecentRepositoriesStore()
+    let recentRepos = RecentRepositoriesStore()
 
     init(state: AppState) {
         self.state = state

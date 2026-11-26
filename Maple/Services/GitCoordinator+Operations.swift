@@ -225,4 +225,41 @@ extension GitCoordinator {
             try await git.deleteTag(name: tag.name, in: path)
         }
     }
+
+    // MARK: - Repository management
+
+    /// Removes a repository from the open list and updates persisted state.
+    /// Does not delete anything on disk.
+    func removeRepository(_ repository: GitRepository) {
+        state.repositories.removeAll { $0.path == repository.path }
+        recentRepos.save(paths: state.repositories.map(\.path))
+
+        guard state.selectedRepository?.path == repository.path else { return }
+
+        if let next = state.repositories.first {
+            state.selectedRepository = next
+            return
+        }
+
+        state.watcher.stop()
+        recentRepos.save(selectedPath: nil)
+        state.selectedRepository = nil
+        state.commits = []
+        state.fileChanges = []
+        state.branches = []
+        state.stashes = []
+        state.tags = []
+        state.currentDiffLines = []
+        state.currentDiffFile = nil
+        state.selectedLines = [:]
+        state.commitDiffFiles = []
+        state.currentBlameLines = []
+        state.selectedCommit = nil
+        state.selectedCommits = []
+        state.selectedFileChange = nil
+        state.unpushedCommitIDs = []
+        state.operationState = .idle
+        state.errorMessage = nil
+        state.successMessage = nil
+    }
 }
