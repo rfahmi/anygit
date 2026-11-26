@@ -262,27 +262,36 @@ nonisolated struct DiffFile: Identifiable, Sendable {
 
         guard anyEmitted else { return "" }
 
+        let finalPreamble = adjustedPreamble(
+            reverse: reverse,
+            totalOldCount: totalOldCount,
+            totalNewCount: totalNewCount
+        )
+        return (finalPreamble + hunkLines).joined(separator: "\n") + "\n"
+    }
+
+    private func adjustedPreamble(reverse: Bool, totalOldCount: Int, totalNewCount: Int) -> [String] {
         // If a newly added file is only partially unstaged (oldCount > 0), the
         // index still retains lines so git apply --reverse must see a normal
         // file header rather than `new file mode` / `--- /dev/null`.
         // Symmetrically, partially staging a deletion (newCount > 0) must not
         // claim `+++ /dev/null`.
-        var adjustedPreamble = preamble
-        if reverse, totalOldCount > 0, let filePath = path {
-            adjustedPreamble = preamble.compactMap { line in
+        guard let filePath = path else { return preamble }
+        if reverse, totalOldCount > 0 {
+            return preamble.compactMap { line in
                 if line.hasPrefix("new file mode ") { return nil }
                 if line == "--- /dev/null" { return "--- a/\(filePath)" }
                 return line
             }
-        } else if !reverse, totalNewCount > 0, let filePath = path {
-            adjustedPreamble = preamble.compactMap { line in
+        }
+        if !reverse, totalNewCount > 0 {
+            return preamble.compactMap { line in
                 if line.hasPrefix("deleted file mode ") { return nil }
                 if line == "+++ /dev/null" { return "+++ b/\(filePath)" }
                 return line
             }
         }
-
-        return (adjustedPreamble + hunkLines).joined(separator: "\n") + "\n"
+        return preamble
     }
 
     private struct RewrittenHunk {
