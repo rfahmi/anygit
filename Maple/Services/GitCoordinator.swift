@@ -208,7 +208,7 @@ final class GitCoordinator {
 
         do {
             async let statusTask = git.status(in: path)
-            async let logTask = git.log(in: path)
+            async let logTask = git.log(in: path, allBranches: state.showAllBranchesInHistory)
             async let branchTask = git.branches(in: path)
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)
@@ -260,7 +260,7 @@ final class GitCoordinator {
 
         do {
             async let statusTask = git.status(in: path)
-            async let logTask = git.log(in: path)
+            async let logTask = git.log(in: path, allBranches: state.showAllBranchesInHistory)
             async let branchTask = git.branches(in: path)
             async let currentBranchTask = git.currentBranch(in: path)
             async let stashTask = git.stashList(in: path)

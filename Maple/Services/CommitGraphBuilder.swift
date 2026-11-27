@@ -44,10 +44,12 @@ nonisolated struct CommitGraphLayout: Sendable {
 }
 
 nonisolated enum CommitGraphBuilder {
+    static let workingTreeNodeID = "__WORKING_TREE__"
+
     /// Builds a lane/edge layout for commits assumed to be in reverse chronological
     /// order (newest first). Each commit's parents are resolved by hash; parents that
     /// are not present in `commits` (e.g. beyond `maxCount`) are dropped.
-    static func build(from commits: [GitCommit]) -> CommitGraphLayout {
+    static func build(from commits: [GitCommit], currentBranch: String? = nil) -> CommitGraphLayout {
         struct PendingEdge {
             let fromRow: Int
             let fromLane: Int
@@ -55,34 +57,22 @@ nonisolated enum CommitGraphBuilder {
             let isMergeParent: Bool
         }
 
-        var activeLanes: [String?] = []           // per-lane: hash of expected next commit (parent of last assigned commit)
+        let headAncestors = firstParentChain(for: currentBranch, in: commits)
+        let reserveLaneZero = !headAncestors.isEmpty
+        var activeLanes: [String?] = reserveLaneZero ? [nil] : []
         var nodes: [CommitGraphLayout.Node] = []
         var positions: [String: (lane: Int, row: Int)] = [:]
         var pendingEdges: [PendingEdge] = []
         var maxLaneSeen = 0
 
         for (row, commit) in commits.enumerated() {
-            var claimedLane: Int?
-            for (idx, expected) in activeLanes.enumerated() where expected == commit.id {
-                if claimedLane == nil {
-                    claimedLane = idx
-                } else {
-                    // Multiple lanes converge on this commit; clear the extras.
-                    // Their edges already point at this hash so rendering is correct.
-                    activeLanes[idx] = nil
-                }
-            }
-
-            let lane: Int
-            if let claimedLane {
-                lane = claimedLane
-            } else if let freeLane = activeLanes.firstIndex(of: nil) {
-                // Root or tip with no descendant in view - pick any free lane.
-                lane = freeLane
-            } else {
-                lane = activeLanes.count
-                activeLanes.append(nil)
-            }
+            let isHeadLine = headAncestors.contains(commit.id)
+            let lane = claimOrAssignLane(
+                for: commit.id,
+                isHeadLine: isHeadLine,
+                reserveLaneZero: reserveLaneZero,
+                activeLanes: &activeLanes
+            )
 
             let isMerge = commit.parents.count > 1
             nodes.append(.init(id: commit.id, lane: lane, rowIndex: row, isMerge: isMerge))
@@ -92,42 +82,96 @@ nonisolated enum CommitGraphBuilder {
             if commit.parents.isEmpty {
                 activeLanes[lane] = nil
             } else {
-                // First parent inherits this lane to keep the main line straight;
-                // extra parents (merges) spawn side lanes.
                 activeLanes[lane] = commit.parents[0]
                 pendingEdges.append(PendingEdge(fromRow: row, fromLane: lane, parentID: commit.parents[0], isMergeParent: false))
 
                 for parent in commit.parents.dropFirst() {
-                    let parentLane: Int
-                    if let freeLane = activeLanes.firstIndex(of: nil) {
-                        parentLane = freeLane
-                        activeLanes[freeLane] = parent
-                    } else {
-                        parentLane = activeLanes.count
-                        activeLanes.append(parent)
-                    }
+                    let parentLane = assignSideLane(
+                        for: parent,
+                        isHeadParent: headAncestors.contains(parent),
+                        reserveLaneZero: reserveLaneZero,
+                        activeLanes: &activeLanes
+                    )
                     maxLaneSeen = max(maxLaneSeen, parentLane + 1)
-                    // fromLane is the child's lane so the edge visibly starts from
-                    // the merge node; toLane (the parent's lane) is resolved below.
                     pendingEdges.append(PendingEdge(fromRow: row, fromLane: lane, parentID: parent, isMergeParent: true))
                 }
             }
         }
 
-        // Edges are deferred until now because a parent may appear many rows
-        // later and we need its final (row, lane) to draw the connector.
-        var edges: [CommitGraphLayout.Edge] = []
-        for pending in pendingEdges {
-            guard let parentPos = positions[pending.parentID] else { continue }
-            edges.append(.init(
+        let edges = pendingEdges.compactMap { pending -> CommitGraphLayout.Edge? in
+            guard let parentPos = positions[pending.parentID] else { return nil }
+            return .init(
                 fromRow: pending.fromRow,
                 fromLane: pending.fromLane,
                 toRow: parentPos.row,
                 toLane: parentPos.lane,
                 isMergeParent: pending.isMergeParent
-            ))
+            )
         }
 
         return CommitGraphLayout(nodes: nodes, edges: edges, laneCount: max(1, maxLaneSeen))
+    }
+
+    private static func firstParentChain(for branch: String?, in commits: [GitCommit]) -> Set<String> {
+        guard let branch,
+              let head = commits.first(where: { $0.refs.contains(branch) || $0.branch == branch }) else {
+            return []
+        }
+        let byID = Dictionary(commits.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var chain: Set<String> = []
+        if commits.first?.id == workingTreeNodeID {
+            chain.insert(workingTreeNodeID)
+        }
+        var cursor: GitCommit? = head
+        while let current = cursor, chain.insert(current.id).inserted {
+            cursor = current.parents.first.flatMap { byID[$0] }
+        }
+        return chain
+    }
+
+    private static func claimOrAssignLane(
+        for commitID: String,
+        isHeadLine: Bool,
+        reserveLaneZero: Bool,
+        activeLanes: inout [String?]
+    ) -> Int {
+        var claimedLane: Int?
+        for (idx, expected) in activeLanes.enumerated() where expected == commitID {
+            if claimedLane == nil {
+                claimedLane = idx
+            } else {
+                activeLanes[idx] = nil
+            }
+        }
+        if isHeadLine, reserveLaneZero { return 0 }
+        if let claimedLane { return claimedLane }
+
+        let minLane = reserveLaneZero ? 1 : 0
+        if let freeLane = activeLanes.indices.dropFirst(minLane).first(where: { activeLanes[$0] == nil }) {
+            return freeLane
+        }
+        let lane = activeLanes.count
+        activeLanes.append(nil)
+        return lane
+    }
+
+    private static func assignSideLane(
+        for parentID: String,
+        isHeadParent: Bool,
+        reserveLaneZero: Bool,
+        activeLanes: inout [String?]
+    ) -> Int {
+        if isHeadParent, reserveLaneZero {
+            activeLanes[0] = parentID
+            return 0
+        }
+        let minLane = reserveLaneZero ? 1 : 0
+        if let freeLane = activeLanes.indices.dropFirst(minLane).first(where: { activeLanes[$0] == nil }) {
+            activeLanes[freeLane] = parentID
+            return freeLane
+        }
+        let lane = activeLanes.count
+        activeLanes.append(parentID)
+        return lane
     }
 }

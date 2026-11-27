@@ -296,4 +296,15 @@ extension GitCoordinator {
         }
         await reconcileSelectedFileDiff()
     }
+
+    // MARK: - History scope
+
+    func reloadHistory() async {
+        guard let path = state.currentRepoPath else { return }
+        do {
+            state.commits = try await git.log(in: path, allBranches: state.showAllBranchesInHistory)
+        } catch {
+            state.errorMessage = error.localizedDescription
+        }
+    }
 }

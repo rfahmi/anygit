@@ -53,16 +53,27 @@ extension GitService {
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
-    /// Commit SHAs on HEAD not yet pushed to its upstream (or any remote).
+    /// Commit SHAs across local branches not yet pushed to any remote
+    /// (plus any commits on HEAD ahead of its configured upstream).
     func unpushedCommitIDs(in directory: String) async -> Set<String> {
-        let args: [String]
-        if await upstreamBranch(in: directory) != nil {
-            args = ["rev-list", "@{u}..HEAD"]
-        } else {
-            args = ["rev-list", "HEAD", "--not", "--remotes"]
+        var result: Set<String> = []
+
+        if let allLocalOut = try? await run(["rev-list", "--branches", "--not", "--remotes"], in: directory) {
+            for line in allLocalOut.split(separator: "\n") {
+                let sha = String(line).trimmingCharacters(in: .whitespaces)
+                if !sha.isEmpty { result.insert(sha) }
+            }
         }
-        let out = (try? await run(args, in: directory)) ?? ""
-        return Set(out.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+
+        if await upstreamBranch(in: directory) != nil,
+           let headOut = try? await run(["rev-list", "@{u}..HEAD"], in: directory) {
+            for line in headOut.split(separator: "\n") {
+                let sha = String(line).trimmingCharacters(in: .whitespaces)
+                if !sha.isEmpty { result.insert(sha) }
+            }
+        }
+
+        return result
     }
 
     /// Configured remote names, in git's listing order.

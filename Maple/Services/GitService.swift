@@ -338,16 +338,18 @@ actor GitService {
 
     // MARK: - Log (commit history)
 
-    func log(in directory: String, maxCount: Int = 200) async throws -> [GitCommit] {
+    func log(in directory: String, maxCount: Int = 200, allBranches: Bool = false) async throws -> [GitCommit] {
         // Custom separator (unlikely to appear in commit messages) lets us parse
         // fields safely even when subjects contain tabs/pipes/etc.
         // Fields: hash, shortHash, subject, author, unixTimestamp, parents, refNames.
         let separator = "<MAPLE_SEP>"
         let format = ["%H", "%h", "%s", "%an", "%at", "%P", "%D"].joined(separator: separator)
-        let output = try await run(
-            ["log", "--all", "--format=\(format)", "-\(maxCount)"],
-            in: directory
-        )
+        var args = ["log"]
+        if allBranches {
+            args.append("--all")
+        }
+        args.append(contentsOf: ["--format=\(format)", "-\(maxCount)"])
+        let output = try await run(args, in: directory)
 
         var commits: [GitCommit] = []
 

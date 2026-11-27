@@ -47,6 +47,7 @@ final class AppState {
     var successMessage: String?
 
     var searchText: String = ""
+    var showAllBranchesInHistory: Bool = true
     var currentTab: DetailTab = .changes
     var unpushedCommitIDs: Set<String> = []
     var unpushedCommitCount: Int { unpushedCommitIDs.count }
